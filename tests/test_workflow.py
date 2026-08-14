@@ -13,7 +13,7 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from cpdm import create_app  # noqa: E402
-from cpdm.core import state, text_rules  # noqa: E402
+from cpdm.core import column_spec, groups, state, text_rules  # noqa: E402
 from cpdm.core.markdown_lite import _fallback_render  # noqa: E402
 from cpdm.paths import PROJECT_ROOT  # noqa: E402
 
@@ -336,6 +336,146 @@ def test_recipe_v2_records_and_replays_text_rules():
     assert set(state.session.df["sex"]) <= wave1_gender
     # the ignored column keeps its original text through the value stage
     assert state.session.df[comments].astype(str).str.contains("[^\x00-\x7F]").any()
+
+
+def prepared_survey(client):
+    """The sample survey with short column names, ready for grouping."""
+    upload(client, "sample_survey.xlsx")
+    apply_recipe(client)
+    return client
+
+
+def test_groups_build_a_tree_and_drive_categories():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create",
+                json={"name": "Background", "kind": "demographics", "spec": "Age, Gender, District"})
+    client.post("/api/groups/create",
+                json={"name": "Wellbeing", "kind": "scale", "spec": "WB1:WB5"})
+    created = client.post("/api/groups/create",
+                          json={"name": "Positive affect", "parent": "Wellbeing",
+                                "spec": "WB1, WB2, WB4"}).get_json()
+
+    assert created["group"]["parent"] == "Wellbeing"
+
+    tree = client.get("/api/groups").get_json()["groups"]
+    names = {node["name"]: node for node in tree}
+    assert set(names) == {"Background", "Wellbeing"}
+    assert [child["name"] for child in names["Wellbeing"]["children"]] == ["Positive affect"]
+    # a subgroup reports the kind of its root
+    assert names["Wellbeing"]["children"][0]["kind"] == "scale"
+
+    # the flat category map the rest of the app reads follows the tree,
+    # with subscale items still counted as part of their scale
+    categories = state.session.state()["categories"]
+    assert categories["Age"] == "Demographics"
+    assert {categories[c] for c in ["WB1", "WB2", "WB3", "WB4", "WB5"]} == {"Scale: Wellbeing"}
+    assert "Wellbeing" in state.session.defined_scales
+
+    # ...so scoring and compute still see the whole scale
+    computed = client.post("/api/compute", json={
+        "new_col_name": "Wellbeing_Mean", "function_name": "mean",
+        "selected_cols": ["WB1", "WB2", "WB3", "WB4", "WB5"]}).get_json()
+    assert computed["new_col"] == "Wellbeing_Mean"
+
+
+def test_subgroup_cannot_reach_outside_its_parent():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+    response = client.post("/api/groups/create",
+                           json={"name": "Bad", "parent": "Wellbeing", "spec": "DS1"})
+
+    assert response.status_code == 400
+    assert "not in the parent group" in response.get_json()["error"]
+
+    eligible = client.post("/api/groups/eligible", json={"parent": "Wellbeing"}).get_json()
+    assert eligible["columns"] == ["WB1", "WB2", "WB3", "WB4", "WB5"]
+
+
+def test_shrinking_a_group_trims_its_subgroups():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+    client.post("/api/groups/create",
+                json={"name": "Positive affect", "parent": "Wellbeing", "spec": "WB1, WB2"})
+
+    result = client.post("/api/groups/update",
+                         json={"name": "Wellbeing", "columns": ["WB2", "WB3"]}).get_json()
+
+    assert result["columns_dropped_from_subgroups"] == 1
+    subgroup = groups.find(state.session, "Positive affect")
+    assert subgroup["columns"] == ["WB2"]
+
+
+def test_a_column_belongs_to_one_group_per_level():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+    moved = client.post("/api/groups/create",
+                        json={"name": "Stress", "spec": "WB5, DS1, DS2"}).get_json()["moved"]
+
+    assert moved == {"Wellbeing": ["WB5"]}
+    assert groups.find(state.session, "Wellbeing")["columns"] == ["WB1", "WB2", "WB3", "WB4"]
+    assert state.session.state()["categories"]["WB5"] == "Scale: Stress"
+
+
+def test_groups_survive_renames_and_track_categorise():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+    client.post("/api/groups/create",
+                json={"name": "Positive affect", "parent": "Wellbeing", "spec": "WB1, WB2"})
+
+    # numerise renames the scale's columns; the tree must follow
+    client.post("/api/numerise", json={"prefix": "W", "target_scale": "Wellbeing"})
+    assert groups.find(state.session, "Wellbeing")["columns"] == ["W1", "W2", "W3", "W4", "W5"]
+    assert groups.find(state.session, "Positive affect")["columns"] == ["W1", "W2"]
+
+    # editing the flat categories rebuilds the roots and keeps the subgroup
+    categories = dict(state.session.categories)
+    categories["W5"] = "Uncategorised"
+    client.post("/api/categorise", json={"categories": categories})
+
+    assert groups.find(state.session, "Wellbeing")["columns"] == ["W1", "W2", "W3", "W4"]
+    assert groups.find(state.session, "Positive affect")["columns"] == ["W1", "W2"]
+
+    # deleting the scale takes its group and subgroups with it
+    client.post("/api/delete_scale", json={"scale_name": "Wellbeing"})
+    assert groups.find(state.session, "Wellbeing") is None
+    assert groups.find(state.session, "Positive affect") is None
+    assert state.session.categories["W1"] == "Uncategorised"
+
+
+def test_column_spec_forms():
+    columns = ["Timestamp", "Age", "WB1", "WB2", "WB3", "DS1", "5"]
+
+    assert column_spec.parse("WB1:WB3", columns)["columns"] == ["WB1", "WB2", "WB3"]
+    assert column_spec.parse("2:4", columns)["columns"] == ["Age", "WB1", "WB2"]
+    assert column_spec.parse("DS*", columns)["columns"] == ["DS1"]
+    assert column_spec.parse("age", columns)["columns"] == ["Age"]        # case-insensitive
+    assert column_spec.parse("5", columns)["columns"] == ["5"]            # a real column wins
+    assert column_spec.parse("WB1, nope", columns)["unknown"] == ["nope"]
+
+    scoped = column_spec.parse("WB1, DS1", columns, allowed=["WB1", "WB2"])
+    assert scoped["columns"] == ["WB1"] and scoped["rejected"] == ["DS1"]
+
+
+def test_groups_console_command():
+    client = fresh_client()
+    prepared_survey(client)
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+    client.post("/api/groups/create",
+                json={"name": "Positive affect", "parent": "Wellbeing", "spec": "WB1"})
+
+    output = client.post("/api/command", json={"command": "groups"}).get_json()["output"]
+    assert "[Wellbeing] Scale, 5 column(s)" in output
+    assert "  - [Positive affect]" in output
 
 
 def test_markdown_fallback_renderer():

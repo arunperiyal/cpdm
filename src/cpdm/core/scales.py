@@ -2,6 +2,7 @@
 
 import pandas as pd
 
+from cpdm.core import groups
 from cpdm.core.dataset import SCALE_PREFIX, UNCATEGORISED
 
 DIRECT = "Direct"
@@ -27,11 +28,17 @@ def delete_scale(dataset, scale_name):
         for col, category in dataset.categories.items():
             if category == target:
                 dataset.categories[col] = UNCATEGORISED
+
+        # the scale's group, and any subscales under it, go with it
+        if groups.find(dataset, scale_name):
+            groups.delete_group(dataset, scale_name)
     return dataset.defined_scales
 
 
 def set_categories(dataset, categories):
+    """Save the flat categorisation, then rebuild the group tree from it."""
     dataset.categories = dict(categories or {})
+    groups.rebuild_from_categories(dataset)
     return dataset.categories
 
 

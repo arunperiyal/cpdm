@@ -20,6 +20,8 @@ Deleting a scale does not delete data: its columns fall back to *Uncategorised*.
 
 Categorisation drives the rest of the app: Scoring, Numerise and Compute only offer columns that sit under a scale.
 
+**Fields → Groups & Subgroups** is the richer version of the same thing: a tree, where a scale can be split into subscales. The two stay in step — a group of kind *Scale* becomes the `Scale: <name>` category for all of its columns, subgroups included. See [Field Groups and Subgroups](/docs/help/field-groups).
+
 ## Numerise (optional)
 
 **Scales → Numerise** renames the items of one scale — or of every scale — to `Scale_1`, `Scale_2`, … using the prefix you choose. Numbering follows the current column order.
@@ -44,7 +46,7 @@ Run scoring **once**. Applying it a second time reverses the reversal.
 ## Order of operations
 
 ```
-Create Scale  →  Categorise  →  (Numerise)  →  Scoring  →  Compute
+Create Scale  →  Categorise or Groups  →  (Numerise)  →  Scoring  →  Compute
 ```
 
 Scoring before value replacement will not work: the items must already hold numbers, or text that converts cleanly to numbers.

@@ -41,6 +41,7 @@ class Dataset:
         self.filename = "dataset.xlsx"
         self.defined_scales = [DEFAULT_SCALE]
         self.categories = {}
+        self.groups = []
         self.scoring_config = {}
         self.cleaning_rules = empty_cleaning_rules()
 
@@ -50,6 +51,7 @@ class Dataset:
         self.df = df
         self.filename = filename or "dataset.xlsx"
         self.categories = {col: UNCATEGORISED for col in df.columns}
+        self.groups = []
         self.scoring_config = {}
         self.cleaning_rules = empty_cleaning_rules()
         return {"filename": self.filename, "rows": len(df), "cols": list(df.columns)}
@@ -94,7 +96,16 @@ class Dataset:
             new_categories[new_col] = self.categories.get(col, UNCATEGORISED)
         self.df = self.df.rename(columns=rename_map)
         self.categories = new_categories
+        self.remap_groups(rename_map)
         return list(self.df.columns)
+
+    def remap_groups(self, rename_map=None):
+        """Follow renames into the group tree and drop columns that are gone."""
+        live = set(self.df.columns) if self.df is not None else set()
+        for group in self.groups:
+            renamed = [(rename_map or {}).get(col, col) for col in group["columns"]]
+            group["columns"] = [col for col in renamed if col in live]
+        return self.groups
 
     # --- recipe ----------------------------------------------------------
     def record_step(self, op, **fields):
@@ -126,6 +137,7 @@ class Dataset:
                 if self.df is not None else []
             ),
             "categories": self.categories,
+            "groups": self.groups,
             "defined_scales": self.defined_scales,
             "ignored_columns": list(self.cleaning_rules.get("ignored_columns", [])),
             "has_cleaning_rules": self.has_cleaning_rules(),

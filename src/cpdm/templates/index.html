@@ -34,6 +34,7 @@
             <button class="nav-btn">Fields</button>
             <div class="dropdown">
                 <div class="dropdown-item" onclick="openCategoriseModal()">Categorise</div>
+                <div class="dropdown-item" onclick="openGroupsModal()">Groups &amp; Subgroups</div>
             </div>
         </div>
 
@@ -133,6 +134,34 @@
         </div>
     </div>
 
+    <!-- Field groups & subgroups -->
+    <div id="modal-groups" class="modal">
+        <div class="modal-content" style="max-width: 980px; width: 94%;">
+            <div class="modal-header">Fields &#8594; Groups &amp; Subgroups</div>
+            <div class="modal-body">
+                <div class="hint-box">
+                    <strong>Group your columns</strong>
+                    <span>A group is a construct — Demographics, or a scale. A subgroup is a facet of
+                    the group above it (a subscale), and can only hold that group's columns.</span>
+                </div>
+                <div class="groups-layout">
+                    <div class="groups-pane">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <strong style="color:#89b4fa; font-size:13px;">Groups</strong>
+                            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px;"
+                                    onclick="groupsNewRoot()">+ New group</button>
+                        </div>
+                        <div id="groups-tree"></div>
+                    </div>
+                    <div class="groups-pane" id="groups-editor"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-groups')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Numerise -->
     <div id="modal-numerise" class="modal">
         <div class="modal-content">
@@ -211,6 +240,7 @@
     <script src="{{ url_for('static', filename='js/files.js') }}"></script>
     <script src="{{ url_for('static', filename='js/cleaning.js') }}"></script>
     <script src="{{ url_for('static', filename='js/text_rules.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/groups.js') }}"></script>
     <script src="{{ url_for('static', filename='js/scales.js') }}"></script>
     <script src="{{ url_for('static', filename='js/compute.js') }}"></script>
     <script src="{{ url_for('static', filename='js/console.js') }}"></script>

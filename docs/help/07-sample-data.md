@@ -41,7 +41,7 @@ Responses run `Strongly Disagree` = 1 to `Strongly Agree` = 5.
 1. File → Open → `sample_survey.xlsx`
 2. Clean → Apply Cleaning File (.json) → `sample_cleaning_rules.json`
 
-That single recipe renames all seventeen headers to short codes, converts every Likert label to a number, converts the gender and yes/no answers, and marks `Timestamp`, `Name` and `Comments` as ignored so the free text is untouched. You land at the point where scales and scoring begin.
+That single recipe renames all seventeen headers to short codes, converts every Likert label to a number, converts the gender and yes/no answers, and marks `Timestamp`, `Name` and `Comments` as ignored so the free text is untouched. You land at the point where [grouping](/docs/help/field-groups), scales and scoring begin.
 
 Apply the recipe to a **raw** file: it is keyed on the original bilingual headers, so it will not match a file whose headers you have already trimmed.
 

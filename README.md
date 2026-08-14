@@ -93,6 +93,24 @@ Version 1 recipes — the older flat format, including `samples/sample_cleaning_
 **Categorise** — assign every column to `Uncategorised`, `Demographics`, or
 `Scale: <name>`. Categories drive the Scales and Compute tools.
 
+**Groups & Subgroups** — the structured version of the same thing: a tree of named
+column sets. A **root group** is a construct (Demographics, Wellbeing) with a *kind* —
+`Scale`, `Demographics` or `Other` (organised but kept out of scoring). A **subgroup** is
+a facet of the group above it — a subscale — and may only hold columns its parent holds;
+the rule applies at every level of nesting.
+
+Columns are ticked in a list or typed as a spec: names (`WB1, DS2`), inclusive ranges by
+name or position (`WB1:WB5`, `7:15`), single positions (`12`) and globs (`WB*`). An exact
+column name always beats the other readings, and the editor reports what matched, what
+didn't, and anything outside the parent group.
+
+Groups and the flat categories stay in step in both directions: saving a group rewrites
+the categories (every column of a scale-kind root, subgroups included, becomes
+`Scale: <name>`, so a scale still scores as one scale), and editing Categorise rebuilds
+the roots while keeping subgroups that still fit. A column belongs to one group per
+level — reassigning it moves it and says so — shrinking a group trims its subgroups, and
+renames from Numerise are followed automatically. `groups` at the prompt prints the tree.
+
 ### Scales
 
 **Create Scale** — define, list and delete named scale groups (`General Scale` exists by
@@ -130,6 +148,7 @@ command `docs` prints links to all of them.
 | `info` | Filename, dimensions, demographics, ignored-column count, scales and their members |
 | `summary` | `describe()` descriptive statistics |
 | `columns` | Column count and full list of names |
+| `groups` | The field group / subgroup tree |
 | `docs` | Links to every documentation page |
 | `replace "old" "new"` | Global literal replacement across active text columns (quoted, Unicode-safe) |
 | `clear` | Clears the output pane |
@@ -148,10 +167,11 @@ in the filename controls ordering only; the URL uses the rest of the name.
 | --- | --- |
 | [Getting Started](docs/help/01-getting-started.md) | [Likert Items and Likert Scales](docs/theory/01-likert-scales.md) |
 | [Cleaning a Dataset](docs/help/02-cleaning-workflow.md) | [Reverse Scoring](docs/theory/02-reverse-scoring.md) |
-| [Scales, Categories and Scoring](docs/help/03-scales-and-scoring.md) | [Scale Scores: Mean, Sum and Missing Data](docs/theory/03-scale-scores.md) |
-| [Computing Scores and Exporting](docs/help/04-compute-and-export.md) | [Principles of Survey Data Cleaning](docs/theory/04-data-cleaning-principles.md) |
-| [Console Commands](docs/help/05-console-commands.md) | [Tidy Data and Why Column Names Matter](docs/theory/05-tidy-data.md) |
-| [Sample Data](docs/help/06-sample-data.md) | |
+| [Field Groups and Subgroups](docs/help/03-field-groups.md) | [Scale Scores: Mean, Sum and Missing Data](docs/theory/03-scale-scores.md) |
+| [Scales, Categories and Scoring](docs/help/04-scales-and-scoring.md) | [Principles of Survey Data Cleaning](docs/theory/04-data-cleaning-principles.md) |
+| [Computing Scores and Exporting](docs/help/05-compute-and-export.md) | [Tidy Data and Why Column Names Matter](docs/theory/05-tidy-data.md) |
+| [Console Commands](docs/help/06-console-commands.md) | |
+| [Sample Data](docs/help/07-sample-data.md) | |
 
 Adding a page is just adding a `.md` file to `docs/help/` or `docs/theory/` — the sidebar,
 the Help menu and the `docs` command pick it up on the next page load.
@@ -201,6 +221,8 @@ src/cpdm/
         text_rules.py        Trimming rules: the chain model and its modes
         cleaning.py          Header mapping, value replacement, trimming
         recipes.py           Saving and replaying cleaning recipes
+        groups.py            The field group tree and the categories it derives
+        column_spec.py       Typed column selections: names, ranges, globs
         scales.py            Scale definitions, categories, numerise, scoring
         compute.py           Row-wise statistics
         console.py           Command prompt handlers
@@ -214,7 +236,7 @@ src/cpdm/
     templates/               index.html (workspace), docs.html (reader)
     static/css/              style.css, docs.css
     static/js/               core, files, cleaning, text_rules (the trimming
-                             wizard), scales, compute, console, docs
+                             wizard), groups, scales, compute, console, docs
 ```
 
 Core modules take a `Dataset` as their first argument and never import Flask, so they can
@@ -242,6 +264,10 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `POST` | `/api/apply_cleaning_rules_file` | Replay a saved recipe |
 | `POST` | `/api/create_scale`, `/api/delete_scale` | Manage scale definitions |
 | `POST` | `/api/categorise` | Save column categories |
+| `GET` | `/api/groups` | The group tree |
+| `POST` | `/api/groups/create`, `/api/groups/update`, `/api/groups/delete` | Edit the tree |
+| `POST` | `/api/groups/eligible` | Columns a group or subgroup may take |
+| `POST` | `/api/groups/resolve_spec` | Resolve a typed column spec |
 | `POST` | `/api/numerise` | Rename scale columns with a prefix |
 | `POST` | `/api/scoring` | Direct/reverse scoring |
 | `POST` | `/api/compute` | Row-wise statistic into a new column |
@@ -254,12 +280,13 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Fifteen end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Twenty-two end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 categorise → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
-fallback renderer, and the trimming wizard — rule chains, delimiter sides, script
-awareness, tidying, collision warnings, and the guarantee that a preview leaves the
-dataset untouched.
+fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
+tidying, collision warnings, and the guarantee that a preview leaves the dataset
+untouched), and field groups (the subgroup containment rule, column moves, subgroup
+trimming, survival through renames and Categorise edits, and the spec parser).
 
 ---
 

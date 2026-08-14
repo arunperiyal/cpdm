@@ -7,6 +7,7 @@ The prompt at the bottom of the workspace takes short commands. Press Enter to r
 | `help` | Lists these commands. |
 | `show` / `head` | Prints the first five rows as a table. |
 | `info` | File name, dimensions, demographic columns, ignored-column count, and every scale with its items. |
+| `groups` | The field group and subgroup tree, indented by depth. |
 | `summary` | Descriptive statistics for the numeric columns (count, mean, sd, min, quartiles, max). |
 | `columns` | Column count, then every column name. |
 | `docs` | Links to the Theory and Help pages. |

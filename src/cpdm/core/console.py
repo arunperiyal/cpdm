@@ -6,12 +6,13 @@ Each handler returns a dict the browser understands: ``output`` for plain text,
 
 import shlex
 
-from cpdm.core import cleaning, docs_library
+from cpdm.core import cleaning, docs_library, groups
 from cpdm.core.dataset import DEMOGRAPHICS, SCALE_PREFIX
 
 HELP_TEXT = """Available Commands:
  - show/head                   : Displays the first 5 rows
  - info                        : Shows dataset shape, scales & categories
+ - groups                      : Shows the field group / subgroup tree
  - summary                     : Descriptive statistics
  - columns                     : Lists all columns
  - docs                        : Lists the Theory & Help documentation pages
@@ -71,6 +72,13 @@ def _cmd_info(dataset, _args):
     return {"output": "\n".join(lines) + "\n"}
 
 
+def _cmd_groups(dataset, _args):
+    lines = groups.summary(dataset)
+    if not lines:
+        return {"output": "No field groups yet. Build them in Fields -> Groups.\n"}
+    return {"output": "Field Groups:\n" + "\n".join(lines) + "\n"}
+
+
 def _cmd_summary(dataset, _args):
     table = dataset.df.describe().to_html(classes="data-table")
     return {"html": f"<strong>Descriptive Statistics:</strong><br>{table}"}
@@ -95,6 +103,7 @@ COMMANDS = {
     "head": (_cmd_show, True),
     "columns": (_cmd_columns, True),
     "info": (_cmd_info, True),
+    "groups": (_cmd_groups, True),
     "summary": (_cmd_summary, True),
     "replace": (_cmd_replace, True),
 }

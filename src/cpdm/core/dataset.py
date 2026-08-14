@@ -11,9 +11,9 @@ UNCATEGORISED = "Uncategorised"
 DEMOGRAPHICS = "Demographics"
 SCALE_PREFIX = "Scale: "
 
-#: what a root group represents. Scale groups hold items to be scored,
-#: demographics hold background variables, and 'other' groups organise columns
-#: that should stay out of both (IDs, timestamps, free text).
+#: what a group represents. Any group at any depth can be a scale: a container
+#: group can hold several scales, and a scale can hold sub-scales. Plain
+#: containers organise columns without claiming them for scoring.
 KIND_SCALE = "scale"
 KIND_DEMOGRAPHICS = "demographics"
 KIND_OTHER = "other"
@@ -22,7 +22,7 @@ KINDS = (KIND_SCALE, KIND_DEMOGRAPHICS, KIND_OTHER)
 KIND_LABELS = {
     KIND_SCALE: "Scale",
     KIND_DEMOGRAPHICS: "Demographics",
-    KIND_OTHER: "Other",
+    KIND_OTHER: "Container",
 }
 
 
@@ -80,11 +80,8 @@ class Dataset:
 
     @property
     def defined_scales(self):
-        """Scale names, derived from the group tree — the single source."""
-        return [
-            group["name"] for group in self.groups
-            if not group["parent"] and group["kind"] == KIND_SCALE
-        ]
+        """Every group marked as a scale, at any depth in the tree."""
+        return [group["name"] for group in self.groups if group["kind"] == KIND_SCALE]
 
     def active_columns(self, extra_ignored=None):
         """Columns that bulk cleaning is allowed to touch."""

@@ -158,8 +158,17 @@ select, input[type="text"], input[type="number"] { background: #11111b; border: 
 .group-name { font-size: 13px; color: #cdd6f4; word-break: break-word; }
 .group-badge {
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
-    color: #a6e3a1; border: 1px solid #313244; border-radius: 3px; padding: 1px 5px;
+    color: #a6adc8; border: 1px solid #313244; border-radius: 3px; padding: 1px 5px;
 }
+.group-badge.kind-scale { color: #a6e3a1; border-color: #a6e3a1; }
+.group-badge.kind-demographics { color: #f9e2af; border-color: #f9e2af; }
+
+.col-index {
+    flex: 0 0 auto; min-width: 20px; text-align: right; font-family: monospace;
+    font-size: 10px; color: #6c7086;
+}
+.col-pick-name { flex: 1; word-break: break-word; }
+.col-table-pos { font-size: 10px; color: #6c7086; font-family: monospace; }
 .group-node-actions { display: flex; gap: 4px; flex: 0 0 auto; }
 .group-node-actions .btn { padding: 2px 8px; font-size: 11px; }
 #groups-editor label { display: block; }

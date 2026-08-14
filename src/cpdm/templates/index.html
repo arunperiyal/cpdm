@@ -41,7 +41,6 @@
         <div class="nav-item">
             <button class="nav-btn">Scales</button>
             <div class="dropdown">
-                <div class="dropdown-item" onclick="openCreateScaleModal()">Create Scale</div>
                 <div class="dropdown-item" onclick="openNumeriseModal()">Numerise</div>
                 <div class="dropdown-item" onclick="openScoringModal()">Scoring</div>
             </div>
@@ -101,24 +100,6 @@
             <div class="modal-header" id="clean-modal-header">Clean &#8594; Step 1: Header Mapping &amp; Selection</div>
             <div class="modal-body" id="clean-modal-body" style="max-height: 450px; overflow-y: auto;"></div>
             <div class="modal-footer" id="clean-modal-footer"></div>
-        </div>
-    </div>
-
-    <!-- Create Scale -->
-    <div id="modal-create-scale" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">Scales &#8594; Define New Scale</div>
-            <div class="modal-body">
-                <div style="display:flex; gap:10px; margin-bottom:15px;">
-                    <input type="text" id="new-scale-input" placeholder="Enter Scale Name (e.g., Anxiety_Scale)" style="flex:1;">
-                    <button class="btn btn-primary" onclick="submitCreateScale()">Create</button>
-                </div>
-                <label style="font-weight:bold; display:block; margin-bottom:8px;">Existing Defined Scales:</label>
-                <div id="defined-scales-list" class="scroll-box"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('modal-create-scale')">Close</button>
-            </div>
         </div>
     </div>
 

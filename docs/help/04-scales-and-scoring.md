@@ -4,14 +4,11 @@ Once the text is clean, CPDM needs to know which columns belong together. That i
 
 ## Define your scales
 
-A scale **is** a group of kind *Scale*. There are two ways to make one, and they produce the same thing:
+Scales are made in **Fields → Groups**, and nowhere else: create a group, set its kind to *Scale*, and give it columns. The scale takes its name and its items from that group. A group at any depth can be a scale, so a container holding `PHQ` and `GAD` gives you two scales, and where marks nest the deepest one wins. See [Field Groups and Subgroups](/docs/help/field-groups).
 
-- **Fields → Groups → + New group**, kind *Scale*, with its columns — the usual route.
-- **Scales → Create Scale**, which creates the scale empty, ready for columns to be filed into it later.
+Deleting the group removes the scale — along with anything beneath it. The columns and their data stay; they simply become ungrouped.
 
-Deleting a scale — from either menu — removes the group and any subscales below it. The columns and their data stay; they simply become ungrouped.
-
-Everything downstream reads the same derived picture: Scoring, Numerise and Compute only offer columns that belong to a scale group, and a scale's subgroups count as part of their scale, so splitting one into subscales does not change how it scores.
+The Scales menu therefore has no "create": it holds the two things you *do* to a scale once it exists.
 
 ## Numerise (optional)
 

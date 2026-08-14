@@ -90,33 +90,38 @@ Version 1 recipes — the older flat format, including `samples/sample_cleaning_
 
 ### Fields
 
-**Groups** — one dialogue, two tabs, for saying what every column *is*. A **root group**
-is a construct (Demographics, Wellbeing) with a *kind*: `Scale`, `Demographics`, or
-`Other` for columns organised but kept out of scoring. A **subgroup** is a facet of the
-group above it — a subscale — and may only hold columns its parent holds; the rule
-applies at every level of nesting.
+**Groups** — one dialogue, two tabs, for saying what every column *is*, and the only
+place scales are defined. A **group** names a set of columns; a **subgroup** holds a
+subset of its parent's columns, at any depth of nesting.
+
+Groups and scales are separate ideas. Each group carries a *kind* — `Scale`,
+`Demographics`, or `Container` (organise only, claims nothing for scoring) — and any
+group at any depth can be a scale, so a container called `Scales` can hold `PHQ` and
+`GAD` as two independent scales. Where marks nest, the deepest one wins: mark a scale's
+subgroups as containers and it scores as one scale; mark them as scales and each becomes
+its own. A scale takes both its name and its items from the group.
 
 *Build groups* creates and edits groups: pick columns by ticking them, or type a spec —
-names (`WB1, DS2`), inclusive ranges by name or position (`WB1:WB5`, `7:15`), single
-positions (`12`), globs (`WB*`). An exact column name always beats the other readings,
-and the editor reports what matched, what didn't, and anything outside the parent group.
+names (`WB1, DS2`), inclusive ranges by name or position (`WB1:WB5`, `8:16`), single
+positions (`12`), globs (`WB*`). **Positions count within the list you are choosing
+from**: at the root that is the table, but inside a group holding table columns 8–16 the
+spec `1:4` means that group's first four columns — table columns 8–11. The picker
+numbers every row and shows the table position alongside when the two differ. An exact
+column name always beats the other readings, and the editor reports what matched, what
+didn't, and anything outside the parent group.
 
 *Assign columns* is the fast route on a wide table: one row per column with a dropdown of
 the whole tree, a search box, an *only ungrouped* filter, and a running count of how many
 columns are still unfiled. Choosing a subgroup files the column under its parent too.
 
-The tree is the single source of truth. The flat categorisation the rest of the app reads
-is derived from it — every column of a scale-kind root, subgroups included, becomes
-`Scale: <name>`, so splitting a scale into subscales does not change how it scores. A
-column belongs to one group per level (reassigning moves it and says so), shrinking a
-group trims its subgroups, and renames from Numerise are followed automatically. `groups`
-at the prompt prints the tree.
+The tree is the single source of truth; the flat categorisation the rest of the app reads
+is derived from it. A column belongs to one group per level (reassigning moves it and
+says so), shrinking a group trims its subgroups, and renames from Numerise are followed
+automatically. `groups` at the prompt prints the tree.
 
 ### Scales
 
-**Create Scale** — creates an empty scale, which is simply a root group of kind `Scale`;
-fill it in under Fields → Groups. Deleting a scale removes the group and any subscales
-below it, leaving those columns ungrouped.
+Scales are created in Fields → Groups; this menu holds what you then do with them.
 
 **Numerise** — bulk-renames the columns of one scale group (or of all of them) to
 `Scale_1`, `Scale_2`, … with a configurable prefix, following column order.
@@ -264,7 +269,6 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `POST` | `/api/remove_non_english_advanced` | Adapter: one header + one value rule |
 | `GET` | `/api/export_cleaning_rules` | Download `cleaning_rules.json` |
 | `POST` | `/api/apply_cleaning_rules_file` | Replay a saved recipe |
-| `POST` | `/api/create_scale`, `/api/delete_scale` | Manage scale definitions |
 | `GET` | `/api/groups` | The group tree, per-column assignments, ungrouped list |
 | `POST` | `/api/groups/create`, `/api/groups/update`, `/api/groups/delete` | Edit the tree |
 | `POST` | `/api/groups/assign` | Set each column's group directly |
@@ -282,14 +286,15 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Twenty-four end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Twenty-six end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
 tidying, collision warnings, and the guarantee that a preview leaves the dataset
-untouched), and field groups (the subgroup containment rule, column moves, subgroup
-trimming, per-column assignment including the parent implication, survival through
-renames and scale deletion, and the spec parser).
+untouched), and field groups (the containment rule, column moves, subgroup trimming,
+per-column assignment including the parent implication, parent-relative positions in a
+spec, a subgroup acting as its own scale, survival through renames and deletion, and the
+spec parser).
 
 ---
 

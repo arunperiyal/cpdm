@@ -1,46 +1,5 @@
 /* Fields & Scales menus: categorisation, scale definitions, numerise, scoring. */
 
-/* --- scale definitions ------------------------------------------------ */
-
-function openCreateScaleModal() {
-    refreshScalesList();
-    openModal('modal-create-scale');
-}
-
-function refreshScalesList() {
-    getState().then(state => {
-        document.getElementById('defined-scales-list').innerHTML = state.defined_scales.map(scale => `
-            <div class="form-row">
-                <span>${escapeHtml(scale)}</span>
-                <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;"
-                        onclick="removeScale(this.dataset.scale)" data-scale="${escapeHtml(scale)}">Delete</button>
-            </div>`).join('');
-    }).catch(reportError);
-}
-
-function submitCreateScale() {
-    const input = document.getElementById('new-scale-input');
-    const scaleName = input.value.trim();
-    if (!scaleName) return;
-
-    apiPost('/api/create_scale', { scale_name: scaleName })
-        .then(() => {
-            log(`[SUCCESS] Scale '${escapeHtml(scaleName)}' created.`, 'success');
-            input.value = '';
-            refreshScalesList();
-        })
-        .catch(reportError);
-}
-
-function removeScale(scaleName) {
-    apiPost('/api/delete_scale', { scale_name: scaleName })
-        .then(() => {
-            log(`[INFO] Scale '${escapeHtml(scaleName)}' removed. Its columns are now Uncategorised.`, 'info');
-            refreshScalesList();
-        })
-        .catch(reportError);
-}
-
 /* --- numerise ---------------------------------------------------------- */
 
 function openNumeriseModal() {

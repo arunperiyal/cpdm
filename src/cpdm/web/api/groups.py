@@ -62,7 +62,9 @@ def create():
         state.session,
         body.get("name"),
         parent=body.get("parent"),
-        kind=body.get("kind", groups.KIND_SCALE),
+        # absent means "let the model decide": scale for a root, container
+        # for a subgroup
+        kind=body.get("kind"),
         columns=body.get("columns"),
         spec=body.get("spec"),
     )

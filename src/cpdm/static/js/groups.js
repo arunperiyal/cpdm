@@ -77,7 +77,7 @@ function renderGroupsTree() {
              style="margin-left:${depth * 16}px">
             <div class="group-node-main">
                 <span class="group-name">${escapeHtml(group.name)}</span>
-                <span class="group-badge">${escapeHtml(group.kind)}</span>
+                <span class="group-badge kind-${escapeHtml(group.kind)}">${escapeHtml(group.label)}</span>
                 <span class="muted">${group.column_count} col(s)</span>
             </div>
             <div class="group-node-actions">
@@ -104,7 +104,7 @@ function groupsNewRoot() {
 }
 
 function groupsNewChild(parent) {
-    groupsUI.editing = { mode: 'create', name: '', parent, kind: null };
+    groupsUI.editing = { mode: 'create', name: '', parent, kind: 'other' };
     groupsLoadEligible(parent, []);
 }
 
@@ -120,7 +120,7 @@ function groupsFind(name, nodes = groupsUI.tree) {
 function groupsEdit(name) {
     const group = groupsFind(name);
     if (!group) return;
-    groupsUI.editing = { mode: 'edit', name, parent: group.parent, kind: group.own_kind };
+    groupsUI.editing = { mode: 'edit', name, parent: group.parent, kind: group.kind };
     groupsLoadEligible(group.parent, group.columns);
 }
 
@@ -159,16 +159,20 @@ function renderGroupsEditor() {
         ? (editing.parent ? `New subgroup of '${escapeHtml(editing.parent)}'` : 'New group')
         : `Editing '${escapeHtml(editing.name)}'`;
 
-    const kindField = editing.parent
-        ? `<div class="muted">Subgroups inherit the kind of their root group.</div>`
-        : `<select id="group-kind" style="width:100%;">
-               ${['scale', 'demographics', 'other'].map(kind => `
-                   <option value="${kind}" ${editing.kind === kind ? 'selected' : ''}>
-                       ${kind === 'scale' ? 'Scale (items to be scored)'
-                         : kind === 'demographics' ? 'Demographics'
-                         : 'Other (kept out of scoring)'}
-                   </option>`).join('')}
-           </select>`;
+    // any group at any depth can be a scale — a container can hold several
+    const kindField = `
+        <select id="group-kind" style="width:100%;">
+            ${['scale', 'demographics', 'other'].map(kind => `
+                <option value="${kind}" ${editing.kind === kind ? 'selected' : ''}>
+                    ${kind === 'scale' ? 'Scale — its columns are scored together as this scale'
+                      : kind === 'demographics' ? 'Demographics — background variables'
+                      : 'Container — organise only, no scoring'}
+                </option>`).join('')}
+        </select>`;
+
+    const scopeNote = editing.parent
+        ? `Positions count within '${escapeHtml(editing.parent)}': <code>1:4</code> is the first four columns listed below.`
+        : `Positions count within the table: <code>7:15</code> is the seventh to fifteenth column.`;
 
     editor.innerHTML = `
         <div class="modal-header" style="font-size:15px; margin-bottom:12px;">${title}</div>
@@ -180,12 +184,13 @@ function renderGroupsEditor() {
         <label class="muted">Kind</label>
         <div style="margin:4px 0 12px;">${kindField}</div>
 
-        <label class="muted">Type columns (names, ranges like <code>WB1:WB5</code> or <code>3:9</code>, globs like <code>WB*</code>)</label>
+        <label class="muted">Type columns — names, ranges (<code>WB1:WB5</code>, <code>1:4</code>) or globs (<code>WB*</code>)</label>
         <div style="display:flex; gap:8px; margin:4px 0 4px;">
-            <input type="text" id="group-spec" placeholder="WB1:WB5, DS*" style="flex:1;"
+            <input type="text" id="group-spec" placeholder="1:4, WB*" style="flex:1;"
                    onkeydown="if (event.key === 'Enter') groupsApplySpec()">
             <button class="btn btn-secondary" onclick="groupsApplySpec()">Add to selection</button>
         </div>
+        <div class="muted" style="margin-bottom:4px;">${scopeNote}</div>
         <div id="group-spec-result" class="muted" style="margin-bottom:12px;"></div>
 
         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -212,14 +217,26 @@ function renderGroupsEditor() {
 function renderGroupsColumns() {
     const search = (document.getElementById('group-search')?.value || '').toLowerCase();
     const visible = groupsUI.eligible.filter(col => col.toLowerCase().includes(search));
+    const scoped = Boolean(groupsUI.editing && groupsUI.editing.parent);
     groupsUI.visible = visible;
 
-    document.getElementById('group-columns').innerHTML = visible.map((col, index) => `
-        <label class="col-pick" title="${escapeHtml(col)}">
-            <input type="checkbox" ${groupsUI.selected.has(col) ? 'checked' : ''}
-                   onclick="groupsToggleColumn(${index}, event)">
-            <span>${escapeHtml(col)}</span>
-        </label>`).join('') || '<div class="muted">No columns available.</div>';
+    document.getElementById('group-columns').innerHTML = visible.map((col, index) => {
+        // the number to type is the position in the *unfiltered* eligible list
+        const position = groupsUI.eligible.indexOf(col) + 1;
+        const inTable = groupsUI.columns.indexOf(col) + 1;
+        const tableNote = scoped && inTable !== position
+            ? `<span class="col-table-pos" title="position in the table">col ${inTable}</span>`
+            : '';
+
+        return `
+            <label class="col-pick" title="${escapeHtml(col)}">
+                <span class="col-index">${position}</span>
+                <input type="checkbox" ${groupsUI.selected.has(col) ? 'checked' : ''}
+                       onclick="groupsToggleColumn(${index}, event)">
+                <span class="col-pick-name">${escapeHtml(col)}</span>
+                ${tableNote}
+            </label>`;
+    }).join('') || '<div class="muted">No columns available.</div>';
 
     const count = document.getElementById('group-col-count');
     if (count) count.textContent = `— ${groupsUI.selected.size} of ${groupsUI.eligible.length} selected`;

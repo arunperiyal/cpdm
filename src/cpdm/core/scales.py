@@ -1,30 +1,14 @@
-"""Scales, numerisation and scoring.
+"""Numerisation and scoring.
 
-A scale *is* a root group of kind ``scale`` (see :mod:`cpdm.core.groups`), so
-the two entries in the Scales menu are thin wrappers over the group tree.
+Scales themselves are not defined here: a scale is a group marked as one in
+Fields -> Groups (see :mod:`cpdm.core.groups`), which is where it takes both
+its name and its columns from. This module only acts on them.
 """
 
 import pandas as pd
 
-from cpdm.core import groups
-from cpdm.core.dataset import KIND_SCALE
-
 DIRECT = "Direct"
 REVERSE = "Reverse"
-
-
-# --- scale definitions ---------------------------------------------------
-def add_scale(dataset, scale_name):
-    """Create an empty scale, ready for columns in Fields -> Groups."""
-    groups.create_group(dataset, scale_name, kind=KIND_SCALE, columns=[])
-    return dataset.defined_scales
-
-
-def delete_scale(dataset, scale_name):
-    """Remove a scale, its subscales, and their hold on any columns."""
-    if groups.find(dataset, scale_name):
-        groups.delete_group(dataset, scale_name)
-    return dataset.defined_scales
 
 
 # --- numerisation --------------------------------------------------------

@@ -1,4 +1,4 @@
-"""Scale definitions, categorisation, numerisation and scoring."""
+"""Numerisation and scoring. Scales are defined in Fields -> Groups."""
 
 from flask import Blueprint
 
@@ -6,18 +6,6 @@ from cpdm.core import scales, state
 from cpdm.web.api.support import api_route, ok, payload
 
 bp = Blueprint("scales_api", __name__, url_prefix="/api")
-
-
-@api_route(bp, "/create_scale", methods=["POST"])
-def create_scale():
-    defined = scales.add_scale(state.session, payload().get("scale_name", ""))
-    return ok(defined_scales=defined)
-
-
-@api_route(bp, "/delete_scale", methods=["POST"])
-def delete_scale():
-    defined = scales.delete_scale(state.session, payload().get("scale_name", ""))
-    return ok(defined_scales=defined)
 
 
 @api_route(bp, "/numerise", methods=["POST"])

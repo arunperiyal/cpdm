@@ -1,6 +1,6 @@
 # Field Groups and Subgroups
 
-**Fields → Groups** is where you say what your columns *are*. A **group** is a construct — Demographics, Wellbeing, Digital Stress. A **subgroup** is a facet of the group above it, which for a questionnaire usually means a subscale.
+**Fields → Groups** is where you say what your columns *are*, and the only place scales are defined. A **group** names a set of columns — Demographics, Wellbeing, or a container holding several instruments. A **subgroup** takes a subset of the group above it: a subscale, or one instrument inside a block of them.
 
 The rule that shapes everything here: a subgroup can only hold columns its parent already holds. Nesting can go deeper than two levels, and the rule applies at each one, so every subgroup's columns belong to its root group.
 
@@ -16,10 +16,24 @@ The dialogue has two tabs, and they edit the same thing from opposite ends:
 | Field | What it does |
 | --- | --- |
 | Group name | Must be unique across the whole tree, subgroups included. |
-| Kind | *Scale* for items to be scored, *Demographics* for background variables, *Other* for columns you want organised but kept out of scoring (IDs, timestamps, free text). Only root groups have a kind; subgroups inherit their root's. |
+| Kind | *Scale*, *Demographics*, or *Container* — see below. Any group can be any kind, at any depth. |
 | Columns | Tick them in the list, or type them — see below. |
 
 **Create group** saves it. The **+ Sub** button on any group opens the same editor for a child, with the column list already narrowed to that group's columns.
+
+## Groups are not scales
+
+A group is organisational. A **scale** is a group whose kind says it is one — and that mark can sit at any level:
+
+| Kind | Meaning |
+| --- | --- |
+| **Scale** | This group's columns are one scale, taking its name. Scoring, Numerise and Compute address it. |
+| **Demographics** | Background variables. |
+| **Container** | Organise only. The group claims nothing for scoring; it just holds things. |
+
+So a container called `Scales` can hold `PHQ` and `GAD` as two separate scales, and a scale can hold containers that merely label facets of it. New root groups default to *Scale*, new subgroups to *Container*, which keeps a subscale inside its parent scale until you say otherwise.
+
+Where a column sits inside nested marked groups, **the deepest mark wins**. Mark `Wellbeing` as the scale and its subgroups as containers, and everything scores as one Wellbeing scale; mark the subgroups as scales instead and each becomes a scale of its own.
 
 ## Typing columns instead of ticking them
 
@@ -28,14 +42,14 @@ The spec box accepts a comma-separated list, and adds whatever it matches to the
 | You type | You get |
 | --- | --- |
 | `WB1, WB3, DS2` | those three columns by name |
-| `WB1:WB5` | every column from `WB1` to `WB5`, in table order |
-| `7:15` | columns 7 to 15 by position (1-based) |
+| `WB1:WB5` | every column from `WB1` to `WB5`, in list order |
+| `8:16` | columns 8 to 16 by position (1-based) |
 | `12` | the twelfth column |
 | `WB*` | every column whose name starts with `WB` |
 
-Names are matched case-insensitively, and an exact column name always wins over the other readings — a column genuinely called `5` resolves to itself, not to the fifth column. After you press **Add to selection** the line underneath reports what matched, what matched nothing, and anything that fell outside the parent group.
+**Positions count within the list shown underneath, not the whole table.** For a root group that list is the table, so `8:16` means the eighth to sixteenth columns. Inside a subgroup it is the parent's columns: if `Scales` holds table columns 8–16, then its subgroup `PHQ` takes `1:4` to mean that group's first four columns — table columns 8–11. Each row in the picker is numbered, and when the two differ the table position is shown dimmed on the right, so you can always see which is which.
 
-Ranges use positions in the table, so `WB1:WB5` picks up everything sitting between those two columns even if one of them is named differently. Check the ticked boxes afterwards.
+Names are matched case-insensitively, and an exact column name always wins over the other readings — a column genuinely called `5` resolves to itself, not to the fifth column. After you press **Add to selection** the line underneath reports what matched, what matched nothing, and anything that fell outside the parent group.
 
 ## Assigning columns one by one
 
@@ -47,11 +61,9 @@ Create the groups under **Build groups** first; the dropdown can only offer grou
 
 ## What groups drive
 
-The group tree is the only place column membership is decided. Everything else reads a flat picture derived from it: each column of a scale-kind root — including the ones inside its subgroups — counts as `Scale: <group name>`, which is what Scoring, Numerise and Compute work from.
+The group tree is the only place column membership is decided, and scales are created here rather than anywhere else — a scale takes both its name and its columns from the group marked as one. Everything downstream reads a flat picture derived from the tree: each column counts as `Scale: <name>` of the deepest scale group holding it, which is what Scoring, Numerise and Compute work from.
 
-So subscale membership lives only in the tree. That is deliberate: splitting a scale into subscales should not stop you scoring or averaging the scale as a whole. A subscale score is simply a Compute run over the columns of one subgroup.
-
-Deleting a scale under **Scales → Create Scale** removes its group and any subgroups beneath it. Deleting a group never touches the data — the columns simply become ungrouped.
+Deleting a group removes it and everything beneath it. It never touches the data — the columns simply become ungrouped.
 
 ## Two rules the editor enforces for you
 
@@ -66,21 +78,22 @@ Type `groups` at the prompt:
 ```
 Field Groups:
 [Background] Demographics, 4 column(s): Age, Gender, District, Occupation
-[Wellbeing] Scale, 5 column(s): WB1, WB2, WB3, WB4, WB5
-  - [Positive affect] Scale, 3 column(s): WB1, WB2, WB4
-  - [Negative affect] Scale, 2 column(s): WB3, WB5
-[Digital Stress] Scale, 4 column(s): DS1, DS2, DS3, DS4
+[Scales] Container, 9 column(s): WB1, WB2, WB3, WB4, WB5, DS1, DS2, DS3, DS4
+  - [PHQ] Scale, 4 column(s): WB1, WB2, WB3, WB4
+  - [GAD] Scale, 4 column(s): DS1, DS2, DS3, DS4
 ```
 
 ## A worked pass over the sample survey
 
 After cleaning `sample_survey.xlsx` (see [Sample Data](/docs/help/sample-data)):
 
-1. **+ New group** → `Background`, kind *Demographics*, spec `Age, Gender, District, Occupation`.
-2. **+ New group** → `Wellbeing`, kind *Scale*, spec `WB1:WB5`.
-3. **+ New group** → `Digital Stress`, kind *Scale*, spec `DS*`.
-4. **+ Sub** on Wellbeing → `Positive affect`, spec `WB1, WB2, WB4`.
-5. **+ Sub** on Wellbeing → `Negative affect`, spec `WB3, WB5` — the two reverse-keyed items.
-6. **+ New group** → `Admin`, kind *Other*, spec `Timestamp, Name, Comments`, so those columns are filed away but stay out of scoring.
+1. **+ New group** → `Background`, kind *Demographics*, spec `3:6` (age, gender, district, occupation).
+2. **+ New group** → `Scales`, kind *Container*, spec `8:16` — the nine item columns.
+3. **+ Sub** on Scales → `Wellbeing`, kind *Scale*, spec `1:5`. Inside `Scales`, `1:5` is its own first five columns, `WB1`–`WB5`.
+4. **+ Sub** on Scales → `Digital Stress`, kind *Scale*, spec `6:9` — `DS1`–`DS4`.
+5. **+ Sub** on Wellbeing → `Negative affect`, kind *Container*, spec `3, 5` — the two reverse-keyed items, labelled without splitting the scale.
+6. **+ New group** → `Admin`, kind *Container*, spec `Timestamp, Name, Comments`, so those columns are filed away but stay out of scoring.
+
+That gives two scales, `Wellbeing` and `Digital Stress`, each addressable on its own in Scoring and Numerise, with the container above them keeping the item block together.
 
 From here, [Scales and Scoring](/docs/help/scales-and-scoring) and [Computing Scores](/docs/help/compute-and-export) work exactly as before — and a subscale mean is just a Compute run over the columns of one subgroup.

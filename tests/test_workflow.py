@@ -58,7 +58,8 @@ def test_full_survey_workflow():
     assert state.session.df["Comments"].astype(str).str.contains("survey").any()
 
     # group -> score -> compute
-    assert client.post("/api/create_scale", json={"scale_name": "Wellbeing"}).status_code == 200
+    assert client.post("/api/groups/create",
+                       json={"name": "Wellbeing", "kind": "scale"}).status_code == 200
     client.post("/api/groups/create",
                 json={"name": "Background", "kind": "demographics", "columns": ["Age"]})
     client.post("/api/groups/assign", json={"assignments": {
@@ -365,8 +366,8 @@ def test_groups_build_a_tree_and_drive_categories():
     names = {node["name"]: node for node in tree}
     assert set(names) == {"Background", "Wellbeing"}
     assert [child["name"] for child in names["Wellbeing"]["children"]] == ["Positive affect"]
-    # a subgroup reports the kind of its root
-    assert names["Wellbeing"]["children"][0]["kind"] == "scale"
+    # a new subgroup is a plain container, so its parent stays the scale
+    assert names["Wellbeing"]["children"][0]["kind"] == "other"
 
     # the flat category map the rest of the app reads follows the tree,
     # with subscale items still counted as part of their scale
@@ -439,8 +440,8 @@ def test_groups_survive_renames_and_scale_deletion():
     assert groups.find(state.session, "Wellbeing")["columns"] == ["W1", "W2", "W3", "W4", "W5"]
     assert groups.find(state.session, "Positive affect")["columns"] == ["W1", "W2"]
 
-    # deleting the scale takes its group and subgroups with it
-    client.post("/api/delete_scale", json={"scale_name": "Wellbeing"})
+    # deleting the group takes its subgroups with it
+    client.post("/api/groups/delete", json={"name": "Wellbeing"})
     assert groups.find(state.session, "Wellbeing") is None
     assert groups.find(state.session, "Positive affect") is None
     assert state.session.categories["W1"] == "Uncategorised"
@@ -451,11 +452,11 @@ def test_assigning_columns_one_by_one():
     client = fresh_client()
     prepared_survey(client)
 
-    client.post("/api/create_scale", json={"scale_name": "Wellbeing"})
+    client.post("/api/groups/create", json={"name": "Wellbeing", "kind": "scale"})
     client.post("/api/groups/create",
                 json={"name": "Background", "kind": "demographics", "columns": []})
 
-    # a scale created from the Scales menu is just an empty group
+    # a scale is just a group marked as one, and starts out empty
     assert state.session.defined_scales == ["Wellbeing"]
     assert groups.find(state.session, "Wellbeing")["columns"] == []
 
@@ -492,6 +493,76 @@ def test_categorise_endpoint_is_gone():
     assert client.post("/api/categorise", json={"categories": {}}).status_code == 404
 
 
+def test_subgroup_positions_are_relative_to_the_parent():
+    """1:4 inside a group means that group's first four columns."""
+    client = fresh_client()
+    prepared_survey(client)
+
+    table = list(state.session.df.columns)
+    assert table[7:16] == ["WB1", "WB2", "WB3", "WB4", "WB5",
+                           "DS1", "DS2", "DS3", "DS4"]
+
+    # a container over table columns 8:16
+    client.post("/api/groups/create",
+                json={"name": "Scales", "kind": "other", "spec": "8:16"})
+
+    resolved = client.post("/api/groups/resolve_spec",
+                           json={"spec": "1:4", "parent": "Scales"}).get_json()
+    assert resolved["columns"] == ["WB1", "WB2", "WB3", "WB4"]
+
+    client.post("/api/groups/create",
+                json={"name": "PHQ", "parent": "Scales", "kind": "scale", "spec": "1:4"})
+    client.post("/api/groups/create",
+                json={"name": "GAD", "parent": "Scales", "kind": "scale", "spec": "6:9"})
+
+    assert groups.find(state.session, "PHQ")["columns"] == ["WB1", "WB2", "WB3", "WB4"]
+    assert groups.find(state.session, "GAD")["columns"] == ["DS1", "DS2", "DS3", "DS4"]
+
+    # the same digits at the root count against the whole table instead
+    root_level = client.post("/api/groups/resolve_spec",
+                             json={"spec": "1:4", "parent": None}).get_json()
+    assert root_level["columns"] == table[:4]
+
+    # a position outside the parent is reported, not silently taken
+    outside = client.post("/api/groups/resolve_spec",
+                          json={"spec": "1, 99, Timestamp", "parent": "Scales"}).get_json()
+    assert outside["columns"] == ["WB1"]
+    assert outside["rejected"] == ["Timestamp"]
+    assert outside["unknown"] == ["99"]
+
+
+def test_a_subgroup_can_be_the_scale():
+    """The deepest group marked as a scale wins, so containers can hold scales."""
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create",
+                json={"name": "Scales", "kind": "other", "spec": "WB1:DS4"})
+    client.post("/api/groups/create",
+                json={"name": "PHQ", "parent": "Scales", "kind": "scale", "spec": "1:5"})
+    client.post("/api/groups/create",
+                json={"name": "GAD", "parent": "Scales", "kind": "scale", "spec": "6:9"})
+
+    # the container claims nothing; each subgroup is its own scale
+    assert state.session.defined_scales == ["PHQ", "GAD"]
+    categories = state.session.categories
+    assert categories["WB1"] == "Scale: PHQ"
+    assert categories["DS1"] == "Scale: GAD"
+
+    # so Numerise and Scoring address them separately
+    client.post("/api/numerise", json={"prefix": "PHQ_", "target_scale": "PHQ"})
+    assert "PHQ_1" in state.session.df.columns
+    assert groups.find(state.session, "PHQ")["columns"][0] == "PHQ_1"
+    assert "DS1" in state.session.df.columns
+
+    # marking the container as the scale instead puts everything back under it
+    client.post("/api/groups/update", json={"name": "Scales", "kind": "scale"})
+    client.post("/api/groups/update", json={"name": "PHQ", "kind": "other"})
+    client.post("/api/groups/update", json={"name": "GAD", "kind": "other"})
+    assert state.session.defined_scales == ["Scales"]
+    assert state.session.categories["PHQ_1"] == "Scale: Scales"
+
+
 def test_column_spec_forms():
     columns = ["Timestamp", "Age", "WB1", "WB2", "WB3", "DS1", "5"]
 
@@ -504,6 +575,10 @@ def test_column_spec_forms():
 
     scoped = column_spec.parse("WB1, DS1", columns, allowed=["WB1", "WB2"])
     assert scoped["columns"] == ["WB1"] and scoped["rejected"] == ["DS1"]
+
+    # positions count within the allowed list, not the table
+    relative = column_spec.parse("1:2", columns, allowed=["WB2", "WB3", "DS1"])
+    assert relative["columns"] == ["WB2", "WB3"]
 
 
 def test_groups_console_command():

@@ -1,15 +1,19 @@
 """Field groups: a tree of named column sets.
 
-A **root group** is a construct — Demographics, Wellbeing, Digital Stress. A
-**subgroup** is a facet of its parent, i.e. a subscale, and may only contain
-columns its parent already holds. Nesting can go deeper; the same rule applies
-at every level, so every subgroup's columns belong to its root.
+A **group** names a set of columns; a **subgroup** is a subset of its parent's
+columns. Nesting can go as deep as you like, and the containment rule holds at
+every level.
+
+Groups and scales are different things. A group is organisational; a *scale* is
+a group whose ``kind`` says so, and that mark can sit at any depth. A container
+group can hold several scales (a "Scales" group holding PHQ and GAD), or a
+scale can hold plain sub-groups that merely label facets of it.
 
 The tree is the only place column membership is decided. The flat
 ``dataset.categories`` map that Scoring, Numerise and Compute read is derived
-from it by :func:`derive_categories` after every change, which gives every
-column of a scale-kind root the category ``Scale: <root name>``. Subscale
-membership lives only in the tree, so a scale keeps working as one scale.
+from it by :func:`derive_categories`: for each column, the **deepest** group
+holding it that is marked as a scale (or as demographics) decides, so a scale
+takes both its name and its items from the group.
 """
 
 from cpdm.core import column_spec
@@ -53,16 +57,17 @@ def descendants(dataset, name):
     return found
 
 
-def root_of(dataset, group):
-    """Walk up to the top-level group (a group with no parent)."""
+def depth_of(dataset, group):
+    """How far below a root a group sits (0 for a root)."""
+    steps = 0
     seen = {group["name"]}
     while group["parent"]:
-        parent = find(dataset, group["parent"])
-        if parent is None or parent["name"] in seen:
+        group = find(dataset, group["parent"])
+        if group is None or group["name"] in seen:
             break
-        seen.add(parent["name"])
-        group = parent
-    return group
+        seen.add(group["name"])
+        steps += 1
+    return steps
 
 
 def tree(dataset):
@@ -72,8 +77,8 @@ def tree(dataset):
         return {
             "name": group["name"],
             "parent": group["parent"],
-            "kind": root_of(dataset, group)["kind"],
-            "own_kind": group["kind"],
+            "kind": group["kind"],
+            "label": KIND_LABELS[group["kind"]],
             "columns": list(group["columns"]),
             "column_count": len(group["columns"]),
             "children": [node(child) for child in children(dataset, group["name"])],
@@ -180,13 +185,14 @@ def _prune_children(dataset, name):
 
 
 # --- operations -----------------------------------------------------------
-def create_group(dataset, name, parent=None, kind=KIND_SCALE, columns=None, spec=None):
+def create_group(dataset, name, parent=None, kind=None, columns=None, spec=None):
+    """Create a group. Subgroups default to plain containers, roots to scales."""
     dataset.require_df()
 
     if parent:
         require(dataset, parent)
     name = _clean_name(dataset, name)
-    kind = _clean_kind(kind)
+    kind = _clean_kind(kind or (KIND_OTHER if parent else KIND_SCALE))
     resolved = _clean_columns(dataset, columns, parent, spec)
 
     group = {"name": name, "parent": parent or None, "kind": kind, "columns": resolved}
@@ -209,7 +215,7 @@ def update_group(dataset, name, new_name=None, kind=None, columns=None, spec=Non
         group["name"] = renamed
         name = renamed
 
-    if kind is not None and not group["parent"]:
+    if kind is not None:
         group["kind"] = _clean_kind(kind)
 
     moved = {}
@@ -234,20 +240,25 @@ def delete_group(dataset, name):
 
 # --- keeping the flat category map in step --------------------------------
 def derive_categories(dataset):
-    """Rewrite ``dataset.categories`` from the tree."""
+    """Rewrite ``dataset.categories`` from the tree.
+
+    The deepest group holding a column decides, so marking a subgroup as a
+    scale makes *it* the column's scale rather than the group above it.
+    Container groups say nothing, and the search carries on up the tree.
+    """
     if dataset.df is None:
         return dataset.categories
 
     categories = {col: UNCATEGORISED for col in dataset.df.columns}
 
-    for group in dataset.groups:
-        root = root_of(dataset, group)
-        if root["kind"] == KIND_OTHER:
+    for group in sorted(dataset.groups, key=lambda g: depth_of(dataset, g)):
+        if group["kind"] == KIND_OTHER:
             continue
         label = (
-            DEMOGRAPHICS if root["kind"] == KIND_DEMOGRAPHICS
-            else SCALE_PREFIX + root["name"]
+            DEMOGRAPHICS if group["kind"] == KIND_DEMOGRAPHICS
+            else SCALE_PREFIX + group["name"]
         )
+        # shallow first, so a deeper scale overwrites the one above it
         for col in group["columns"]:
             if col in categories:
                 categories[col] = label
@@ -311,17 +322,7 @@ def group_of(dataset, column):
     holders = [group for group in dataset.groups if column in group["columns"]]
     if not holders:
         return None
-
-    def depth(group):
-        steps = 0
-        while group["parent"]:
-            group = find(dataset, group["parent"])
-            if group is None:
-                break
-            steps += 1
-        return steps
-
-    return max(holders, key=depth)["name"]
+    return max(holders, key=lambda group: depth_of(dataset, group))["name"]
 
 
 def summary(dataset):
@@ -330,7 +331,7 @@ def summary(dataset):
 
     def walk(group, depth):
         marker = "  " * depth + ("- " if depth else "")
-        kind = KIND_LABELS[root_of(dataset, group)["kind"]]
+        kind = KIND_LABELS[group["kind"]]
         lines.append(
             f"{marker}[{group['name']}] {kind}, {len(group['columns'])} column(s): "
             + (", ".join(group["columns"]) if group["columns"] else "none")

@@ -5,26 +5,24 @@ A **root group** is a construct — Demographics, Wellbeing, Digital Stress. A
 columns its parent already holds. Nesting can go deeper; the same rule applies
 at every level, so every subgroup's columns belong to its root.
 
-Groups are the structured view of the flat ``dataset.categories`` map that
-Scoring, Numerise and Compute read: after any change here,
-:func:`derive_categories` rewrites that map, giving every column of a
-scale-kind root the category ``Scale: <root name>``. Subscale membership lives
-only in the tree, so a scale keeps working as one scale.
+The tree is the only place column membership is decided. The flat
+``dataset.categories`` map that Scoring, Numerise and Compute read is derived
+from it by :func:`derive_categories` after every change, which gives every
+column of a scale-kind root the category ``Scale: <root name>``. Subscale
+membership lives only in the tree, so a scale keeps working as one scale.
 """
 
 from cpdm.core import column_spec
-from cpdm.core.dataset import DEMOGRAPHICS, SCALE_PREFIX, UNCATEGORISED
-
-KIND_SCALE = "scale"
-KIND_DEMOGRAPHICS = "demographics"
-KIND_OTHER = "other"
-KINDS = (KIND_SCALE, KIND_DEMOGRAPHICS, KIND_OTHER)
-
-KIND_LABELS = {
-    KIND_SCALE: "Scale",
-    KIND_DEMOGRAPHICS: "Demographics",
-    KIND_OTHER: "Other",
-}
+from cpdm.core.dataset import (
+    DEMOGRAPHICS,
+    KIND_DEMOGRAPHICS,
+    KIND_LABELS,
+    KIND_OTHER,
+    KIND_SCALE,
+    KINDS,
+    SCALE_PREFIX,
+    UNCATEGORISED,
+)
 
 
 # --- lookups --------------------------------------------------------------
@@ -236,7 +234,7 @@ def delete_group(dataset, name):
 
 # --- keeping the flat category map in step --------------------------------
 def derive_categories(dataset):
-    """Rewrite ``dataset.categories`` and ``defined_scales`` from the tree."""
+    """Rewrite ``dataset.categories`` from the tree."""
     if dataset.df is None:
         return dataset.categories
 
@@ -255,53 +253,75 @@ def derive_categories(dataset):
                 categories[col] = label
 
     dataset.categories = categories
-
-    for group in dataset.groups:
-        if not group["parent"] and group["kind"] == KIND_SCALE:
-            if group["name"] not in dataset.defined_scales:
-                dataset.defined_scales.append(group["name"])
-
     return categories
 
 
-def rebuild_from_categories(dataset):
-    """Rebuild root groups from the flat categories, keeping subgroups.
+def assign_columns(dataset, assignments):
+    """Move columns between groups, one column at a time.
 
-    Fields -> Categorise edits the flat map directly, so the tree has to follow.
-    Subgroups survive wherever their columns are still inside the same root.
+    ``assignments`` maps a column to the group it should end up in, or to an
+    empty value to leave it ungrouped. Naming a subgroup puts the column in its
+    ancestors too, since a subgroup's columns are always part of its parent.
     """
-    if dataset.df is None:
-        return dataset.groups
+    dataset.require_df()
 
-    subgroups = [group for group in dataset.groups if group["parent"]]
-    roots = {}
+    live = set(dataset.df.columns)
+    moved = 0
+    cleared = 0
 
-    for col in dataset.df.columns:
-        category = dataset.categories.get(col, UNCATEGORISED)
-        if category == DEMOGRAPHICS:
-            key, kind = DEMOGRAPHICS, KIND_DEMOGRAPHICS
-        elif category.startswith(SCALE_PREFIX):
-            key, kind = category[len(SCALE_PREFIX):], KIND_SCALE
+    for column, target in (assignments or {}).items():
+        if column not in live:
+            raise ValueError(f"Unknown column '{column}'.")
+
+        wanted = set()
+        if target:
+            group = require(dataset, target)
+            while group:
+                wanted.add(group["name"])
+                group = find(dataset, group["parent"]) if group["parent"] else None
+
+        for group in dataset.groups:
+            holds = column in group["columns"]
+            if group["name"] in wanted and not holds:
+                # keep the group's columns in table order
+                group["columns"] = [
+                    col for col in dataset.df.columns
+                    if col in set(group["columns"]) | {column}
+                ]
+            elif holds and group["name"] not in wanted:
+                group["columns"] = [col for col in group["columns"] if col != column]
+
+        if wanted:
+            moved += 1
         else:
-            continue
-        roots.setdefault(key, {"name": key, "parent": None, "kind": kind, "columns": []})
-        roots[key]["columns"].append(col)
-
-    dataset.groups = list(roots.values())
-
-    # re-attach the subgroups whose parent still exists, trimmed to it
-    for subgroup in subgroups:
-        parent = find(dataset, subgroup["parent"])
-        if parent is None:
-            continue
-        allowed = set(parent["columns"])
-        kept = [col for col in subgroup["columns"] if col in allowed]
-        if kept:
-            subgroup["columns"] = kept
-            dataset.groups.append(subgroup)
+            cleared += 1
 
     derive_categories(dataset)
-    return dataset.groups
+    return {"assigned": moved, "cleared": cleared}
+
+
+def ungrouped_columns(dataset):
+    """Columns that belong to no group at all."""
+    taken = {col for group in dataset.groups for col in group["columns"]}
+    return [col for col in dataset.require_df().columns if col not in taken]
+
+
+def group_of(dataset, column):
+    """The deepest group holding a column, which is what the UI shows."""
+    holders = [group for group in dataset.groups if column in group["columns"]]
+    if not holders:
+        return None
+
+    def depth(group):
+        steps = 0
+        while group["parent"]:
+            group = find(dataset, group["parent"])
+            if group is None:
+                break
+            steps += 1
+        return steps
+
+    return max(holders, key=depth)["name"]
 
 
 def summary(dataset):

@@ -57,13 +57,15 @@ def test_full_survey_workflow():
     # ignored columns keep their original free text
     assert state.session.df["Comments"].astype(str).str.contains("survey").any()
 
-    # scales -> categorise -> score -> compute
+    # group -> score -> compute
     assert client.post("/api/create_scale", json={"scale_name": "Wellbeing"}).status_code == 200
-    categories = {col: "Uncategorised" for col in state.session.df.columns}
-    for col in ["WB1", "WB2", "WB3", "WB4", "WB5"]:
-        categories[col] = "Scale: Wellbeing"
-    categories["Age"] = "Demographics"
-    client.post("/api/categorise", json={"categories": categories})
+    client.post("/api/groups/create",
+                json={"name": "Background", "kind": "demographics", "columns": ["Age"]})
+    client.post("/api/groups/assign", json={"assignments": {
+        col: "Wellbeing" for col in ["WB1", "WB2", "WB3", "WB4", "WB5"]
+    }})
+    assert state.session.categories["WB1"] == "Scale: Wellbeing"
+    assert state.session.categories["Age"] == "Demographics"
 
     client.post(
         "/api/scoring",
@@ -424,7 +426,7 @@ def test_a_column_belongs_to_one_group_per_level():
     assert state.session.state()["categories"]["WB5"] == "Scale: Stress"
 
 
-def test_groups_survive_renames_and_track_categorise():
+def test_groups_survive_renames_and_scale_deletion():
     client = fresh_client()
     prepared_survey(client)
 
@@ -437,19 +439,57 @@ def test_groups_survive_renames_and_track_categorise():
     assert groups.find(state.session, "Wellbeing")["columns"] == ["W1", "W2", "W3", "W4", "W5"]
     assert groups.find(state.session, "Positive affect")["columns"] == ["W1", "W2"]
 
-    # editing the flat categories rebuilds the roots and keeps the subgroup
-    categories = dict(state.session.categories)
-    categories["W5"] = "Uncategorised"
-    client.post("/api/categorise", json={"categories": categories})
-
-    assert groups.find(state.session, "Wellbeing")["columns"] == ["W1", "W2", "W3", "W4"]
-    assert groups.find(state.session, "Positive affect")["columns"] == ["W1", "W2"]
-
     # deleting the scale takes its group and subgroups with it
     client.post("/api/delete_scale", json={"scale_name": "Wellbeing"})
     assert groups.find(state.session, "Wellbeing") is None
     assert groups.find(state.session, "Positive affect") is None
     assert state.session.categories["W1"] == "Uncategorised"
+    assert state.session.defined_scales == []
+
+
+def test_assigning_columns_one_by_one():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/create_scale", json={"scale_name": "Wellbeing"})
+    client.post("/api/groups/create",
+                json={"name": "Background", "kind": "demographics", "columns": []})
+
+    # a scale created from the Scales menu is just an empty group
+    assert state.session.defined_scales == ["Wellbeing"]
+    assert groups.find(state.session, "Wellbeing")["columns"] == []
+
+    client.post("/api/groups/assign", json={"assignments": {
+        "WB1": "Wellbeing", "WB2": "Wellbeing", "WB3": "Wellbeing",
+        "Age": "Background", "Gender": "Background",
+    }})
+
+    listing = client.get("/api/groups").get_json()
+    assert listing["assignments"]["WB1"] == "Wellbeing"
+    assert listing["assignments"]["Comments"] is None
+    assert "Comments" in listing["ungrouped"]
+    assert state.session.categories["Gender"] == "Demographics"
+
+    # naming a subgroup files the column under its parent as well
+    client.post("/api/groups/create",
+                json={"name": "Positive affect", "parent": "Wellbeing", "columns": ["WB1"]})
+    client.post("/api/groups/assign", json={"assignments": {"WB2": "Positive affect"}})
+
+    assert groups.find(state.session, "Positive affect")["columns"] == ["WB1", "WB2"]
+    assert "WB2" in groups.find(state.session, "Wellbeing")["columns"]
+    assert client.get("/api/groups").get_json()["assignments"]["WB2"] == "Positive affect"
+
+    # clearing a column takes it out of every group, parents included
+    client.post("/api/groups/assign", json={"assignments": {"WB2": ""}})
+    assert "WB2" not in groups.find(state.session, "Wellbeing")["columns"]
+    assert "WB2" not in groups.find(state.session, "Positive affect")["columns"]
+    assert state.session.categories["WB2"] == "Uncategorised"
+
+
+def test_categorise_endpoint_is_gone():
+    client = fresh_client()
+    prepared_survey(client)
+    assert client.post("/api/categorise", json={"categories": {}}).status_code == 404
 
 
 def test_column_spec_forms():

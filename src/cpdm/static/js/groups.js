@@ -5,28 +5,66 @@
    Columns can be ticked in the list or typed as a spec (names, ranges, globs). */
 
 const groupsUI = {
+    view: 'build',      // 'build' = edit the tree, 'assign' = one row per column
     tree: [],
     editing: null,      // {mode: 'create'|'edit', name, parent, kind}
     eligible: [],
     selected: new Set(),
-    anchor: null
+    anchor: null,
+    columns: [],
+    assignments: {},    // column -> deepest group holding it, or null
+    pending: {},        // unsaved changes from the assign view
+    onlyUngrouped: false
 };
 
-function openGroupsModal() {
+function openGroupsModal(view = 'build') {
     withDataset(() => {
         groupsUI.editing = null;
+        groupsUI.pending = {};
+        groupsUI.view = view;
         refreshGroups().then(() => openModal('modal-groups'));
     });
+}
+
+function groupsSetView(view) {
+    groupsUI.view = view;
+    renderGroupsView();
+}
+
+function renderGroupsView() {
+    const building = groupsUI.view === 'build';
+    document.getElementById('groups-build').style.display = building ? '' : 'none';
+    document.getElementById('groups-assign').style.display = building ? 'none' : '';
+    document.getElementById('tab-build').classList.toggle('active', building);
+    document.getElementById('tab-assign').classList.toggle('active', !building);
+    if (!building) renderGroupsAssign();
+    renderGroupsStatus();
 }
 
 function refreshGroups() {
     return apiGet('/api/groups')
         .then(data => {
             groupsUI.tree = data.groups;
+            groupsUI.columns = data.cols;
+            groupsUI.assignments = data.assignments;
+            groupsUI.ungrouped = data.ungrouped;
             renderGroupsTree();
             renderGroupsEditor();
+            renderGroupsView();
         })
         .catch(reportError);
+}
+
+function renderGroupsStatus() {
+    const note = document.getElementById('groups-ungrouped-note');
+    const count = (groupsUI.ungrouped || []).length;
+    note.textContent = count
+        ? `${count} of ${groupsUI.columns.length} column(s) ungrouped`
+        : `all ${groupsUI.columns.length} column(s) grouped`;
+
+    const pending = Object.keys(groupsUI.pending).length;
+    document.getElementById('groups-assign-status').textContent =
+        pending ? `${pending} unsaved change(s)` : '';
 }
 
 /* --- tree -------------------------------------------------------------- */
@@ -265,6 +303,108 @@ function groupsSave() {
         })
         .catch(reportError);
 }
+
+/* --- assign view: one row per column ----------------------------------- */
+
+/* The tree flattened for a dropdown, each entry carrying its depth. */
+function groupsFlat(nodes = groupsUI.tree, depth = 0, out = []) {
+    nodes.forEach(node => {
+        out.push({ name: node.name, depth, kind: node.kind });
+        groupsFlat(node.children, depth + 1, out);
+    });
+    return out;
+}
+
+function groupsCurrentTarget(column) {
+    return Object.prototype.hasOwnProperty.call(groupsUI.pending, column)
+        ? groupsUI.pending[column]
+        : (groupsUI.assignments[column] || '');
+}
+
+function renderGroupsAssign() {
+    const flat = groupsFlat();
+    const search = (document.getElementById('assign-search')?.value || '').toLowerCase();
+
+    const rows = groupsUI.columns.filter(col => {
+        if (search && !col.toLowerCase().includes(search)) return false;
+        if (groupsUI.onlyUngrouped && groupsCurrentTarget(col)) return false;
+        return true;
+    });
+
+    const options = column => {
+        const current = groupsCurrentTarget(column);
+        const list = flat.map(entry => {
+            const indent = '&nbsp;'.repeat(entry.depth * 4) + (entry.depth ? '&#8627; ' : '');
+            return `<option value="${escapeHtml(entry.name)}" ${current === entry.name ? 'selected' : ''}>
+                        ${indent}${escapeHtml(entry.name)}</option>`;
+        }).join('');
+        return `<option value="" ${current ? '' : 'selected'}>— ungrouped —</option>${list}`;
+    };
+
+    document.getElementById('groups-assign').innerHTML = `
+        <div class="hint-box">
+            <strong>Assign each column to a group</strong>
+            <span>Quicker than the tree when you just need to file every column. Picking a
+            subgroup files the column under its parent too. Create the groups first under
+            <em>Build groups</em>.</span>
+        </div>
+
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+            <input type="text" id="assign-search" value="${escapeHtml(search)}" placeholder="Search columns..."
+                   style="flex:1; min-width:180px; font-size:12px;" oninput="renderGroupsAssign()">
+            <label class="muted" style="display:flex; align-items:center; gap:6px; margin:0;">
+                <input type="checkbox" ${groupsUI.onlyUngrouped ? 'checked' : ''}
+                       onchange="groupsUI.onlyUngrouped = this.checked; renderGroupsAssign();">
+                only ungrouped
+            </label>
+            <button class="btn btn-primary" style="padding:4px 12px; font-size:12px;"
+                    onclick="groupsSaveAssignments()">Save assignments</button>
+        </div>
+
+        ${flat.length ? '' : '<div class="muted" style="margin-bottom:10px;">No groups yet — create one under <em>Build groups</em> first.</div>'}
+
+        <div class="assign-list">
+            ${rows.map(col => `
+                <div class="form-row assign-row">
+                    <span title="${escapeHtml(col)}">${escapeHtml(col)}</span>
+                    <select data-col="${escapeHtml(col)}"
+                            onchange="groupsStageAssignment(this.dataset.col, this.value)">
+                        ${options(col)}
+                    </select>
+                </div>`).join('') || '<div class="muted">No columns match.</div>'}
+        </div>`;
+
+    const box = document.getElementById('assign-search');
+    if (box && search) { box.focus(); box.setSelectionRange(search.length, search.length); }
+    renderGroupsStatus();
+}
+
+function groupsStageAssignment(column, target) {
+    if ((groupsUI.assignments[column] || '') === target) {
+        delete groupsUI.pending[column];
+    } else {
+        groupsUI.pending[column] = target;
+    }
+    renderGroupsStatus();
+}
+
+function groupsSaveAssignments() {
+    const assignments = groupsUI.pending;
+    if (!Object.keys(assignments).length) {
+        log('[INFO] No assignment changes to save.', 'info');
+        return;
+    }
+
+    apiPost('/api/groups/assign', { assignments })
+        .then(data => {
+            log(`[SUCCESS] Filed ${data.assigned} column(s) into groups; ${data.cleared} left ungrouped.`, 'success');
+            groupsUI.pending = {};
+            return refreshGroups();
+        })
+        .catch(reportError);
+}
+
+/* --- deletion ------------------------------------------------------------ */
 
 function groupsDelete(name) {
     const group = groupsFind(name);

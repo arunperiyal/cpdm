@@ -20,12 +20,6 @@ def delete_scale():
     return ok(defined_scales=defined)
 
 
-@api_route(bp, "/categorise", methods=["POST"])
-def categorise():
-    scales.set_categories(state.session, payload().get("categories", {}))
-    return ok()
-
-
 @api_route(bp, "/numerise", methods=["POST"])
 def numerise():
     body = payload()

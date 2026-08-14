@@ -4,7 +4,7 @@ function openComputeModal() {
     withDataset(state => {
         const scaleCols = scaleColumnsOf(state);
         if (!scaleCols.length) {
-            logError('No columns assigned to scales. Use Fields -> Categorise first.');
+            logError('No columns belong to a scale yet. Build one in Fields -> Groups.');
             return;
         }
 

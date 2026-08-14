@@ -41,46 +41,6 @@ function removeScale(scaleName) {
         .catch(reportError);
 }
 
-/* --- categorisation ---------------------------------------------------- */
-
-function openCategoriseModal() {
-    withDataset(state => {
-        document.getElementById('categorise-body').innerHTML = state.cols.map(col => {
-            const current = state.categories[col] || 'Uncategorised';
-            const scaleOptions = state.defined_scales.map(scale => {
-                const value = `Scale: ${scale}`;
-                return `<option value="${escapeHtml(value)}" ${current === value ? 'selected' : ''}>${escapeHtml(value)}</option>`;
-            }).join('');
-
-            return `
-                <div class="form-row">
-                    <span>${escapeHtml(col)}</span>
-                    <select class="cat-select" data-col="${escapeHtml(col)}">
-                        <option value="Uncategorised" ${current === 'Uncategorised' ? 'selected' : ''}>Uncategorised</option>
-                        <option value="Demographics" ${current === 'Demographics' ? 'selected' : ''}>Demographics</option>
-                        ${scaleOptions}
-                    </select>
-                </div>`;
-        }).join('');
-
-        openModal('modal-categorise');
-    });
-}
-
-function saveCategorisation() {
-    const categories = {};
-    document.querySelectorAll('.cat-select').forEach(select => {
-        categories[select.dataset.col] = select.value;
-    });
-
-    apiPost('/api/categorise', { categories })
-        .then(() => {
-            log('[SUCCESS] Column categorisation updated.', 'success');
-            closeModal('modal-categorise');
-        })
-        .catch(reportError);
-}
-
 /* --- numerise ---------------------------------------------------------- */
 
 function openNumeriseModal() {
@@ -111,7 +71,7 @@ function openScoringModal() {
     withDataset(state => {
         const scaleCols = scaleColumnsOf(state);
         if (!scaleCols.length) {
-            logError('No columns categorised under any scale. Use Fields -> Categorise first.');
+            logError('No columns belong to a scale yet. Build one in Fields -> Groups.');
             return;
         }
 

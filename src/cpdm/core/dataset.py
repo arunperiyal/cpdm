@@ -10,7 +10,20 @@ import pandas as pd
 UNCATEGORISED = "Uncategorised"
 DEMOGRAPHICS = "Demographics"
 SCALE_PREFIX = "Scale: "
-DEFAULT_SCALE = "General Scale"
+
+#: what a root group represents. Scale groups hold items to be scored,
+#: demographics hold background variables, and 'other' groups organise columns
+#: that should stay out of both (IDs, timestamps, free text).
+KIND_SCALE = "scale"
+KIND_DEMOGRAPHICS = "demographics"
+KIND_OTHER = "other"
+KINDS = (KIND_SCALE, KIND_DEMOGRAPHICS, KIND_OTHER)
+
+KIND_LABELS = {
+    KIND_SCALE: "Scale",
+    KIND_DEMOGRAPHICS: "Demographics",
+    KIND_OTHER: "Other",
+}
 
 
 #: recipe schema version. v1 was the flat header_map / value_replacements /
@@ -39,7 +52,6 @@ class Dataset:
         """Return to the just-started state, keeping the object identity."""
         self.df = None
         self.filename = "dataset.xlsx"
-        self.defined_scales = [DEFAULT_SCALE]
         self.categories = {}
         self.groups = []
         self.scoring_config = {}
@@ -65,6 +77,14 @@ class Dataset:
     @property
     def ignored_columns(self):
         return set(self.cleaning_rules.get("ignored_columns", []))
+
+    @property
+    def defined_scales(self):
+        """Scale names, derived from the group tree — the single source."""
+        return [
+            group["name"] for group in self.groups
+            if not group["parent"] and group["kind"] == KIND_SCALE
+        ]
 
     def active_columns(self, extra_ignored=None):
         """Columns that bulk cleaning is allowed to touch."""

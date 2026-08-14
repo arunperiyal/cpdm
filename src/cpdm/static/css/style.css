@@ -164,3 +164,18 @@ select, input[type="text"], input[type="number"] { background: #11111b; border: 
 .group-node-actions .btn { padding: 2px 8px; font-size: 11px; }
 #groups-editor label { display: block; }
 #groups-editor code { background: #11111b; padding: 0 3px; border-radius: 3px; }
+
+.tab-strip {
+    display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid #313244; margin-bottom: 14px;
+}
+.tab {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    color: #a6adc8; padding: 8px 14px; font-size: 13px; cursor: pointer;
+}
+.tab:hover { color: #cdd6f4; }
+.tab.active { color: #89b4fa; border-bottom-color: #89b4fa; }
+
+.assign-list { max-height: 46vh; overflow-y: auto; padding-right: 6px; }
+.assign-row span { font-size: 12px; word-break: break-word; padding-right: 10px; }
+.assign-row select { min-width: 220px; font-size: 12px; }

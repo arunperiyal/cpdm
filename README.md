@@ -90,31 +90,33 @@ Version 1 recipes — the older flat format, including `samples/sample_cleaning_
 
 ### Fields
 
-**Categorise** — assign every column to `Uncategorised`, `Demographics`, or
-`Scale: <name>`. Categories drive the Scales and Compute tools.
+**Groups** — one dialogue, two tabs, for saying what every column *is*. A **root group**
+is a construct (Demographics, Wellbeing) with a *kind*: `Scale`, `Demographics`, or
+`Other` for columns organised but kept out of scoring. A **subgroup** is a facet of the
+group above it — a subscale — and may only hold columns its parent holds; the rule
+applies at every level of nesting.
 
-**Groups & Subgroups** — the structured version of the same thing: a tree of named
-column sets. A **root group** is a construct (Demographics, Wellbeing) with a *kind* —
-`Scale`, `Demographics` or `Other` (organised but kept out of scoring). A **subgroup** is
-a facet of the group above it — a subscale — and may only hold columns its parent holds;
-the rule applies at every level of nesting.
+*Build groups* creates and edits groups: pick columns by ticking them, or type a spec —
+names (`WB1, DS2`), inclusive ranges by name or position (`WB1:WB5`, `7:15`), single
+positions (`12`), globs (`WB*`). An exact column name always beats the other readings,
+and the editor reports what matched, what didn't, and anything outside the parent group.
 
-Columns are ticked in a list or typed as a spec: names (`WB1, DS2`), inclusive ranges by
-name or position (`WB1:WB5`, `7:15`), single positions (`12`) and globs (`WB*`). An exact
-column name always beats the other readings, and the editor reports what matched, what
-didn't, and anything outside the parent group.
+*Assign columns* is the fast route on a wide table: one row per column with a dropdown of
+the whole tree, a search box, an *only ungrouped* filter, and a running count of how many
+columns are still unfiled. Choosing a subgroup files the column under its parent too.
 
-Groups and the flat categories stay in step in both directions: saving a group rewrites
-the categories (every column of a scale-kind root, subgroups included, becomes
-`Scale: <name>`, so a scale still scores as one scale), and editing Categorise rebuilds
-the roots while keeping subgroups that still fit. A column belongs to one group per
-level — reassigning it moves it and says so — shrinking a group trims its subgroups, and
-renames from Numerise are followed automatically. `groups` at the prompt prints the tree.
+The tree is the single source of truth. The flat categorisation the rest of the app reads
+is derived from it — every column of a scale-kind root, subgroups included, becomes
+`Scale: <name>`, so splitting a scale into subscales does not change how it scores. A
+column belongs to one group per level (reassigning moves it and says so), shrinking a
+group trims its subgroups, and renames from Numerise are followed automatically. `groups`
+at the prompt prints the tree.
 
 ### Scales
 
-**Create Scale** — define, list and delete named scale groups (`General Scale` exists by
-default). Deleting a scale returns its columns to `Uncategorised`.
+**Create Scale** — creates an empty scale, which is simply a root group of kind `Scale`;
+fill it in under Fields → Groups. Deleting a scale removes the group and any subscales
+below it, leaving those columns ungrouped.
 
 **Numerise** — bulk-renames the columns of one scale group (or of all of them) to
 `Scale_1`, `Scale_2`, … with a configurable prefix, following column order.
@@ -168,7 +170,7 @@ in the filename controls ordering only; the URL uses the rest of the name.
 | [Getting Started](docs/help/01-getting-started.md) | [Likert Items and Likert Scales](docs/theory/01-likert-scales.md) |
 | [Cleaning a Dataset](docs/help/02-cleaning-workflow.md) | [Reverse Scoring](docs/theory/02-reverse-scoring.md) |
 | [Field Groups and Subgroups](docs/help/03-field-groups.md) | [Scale Scores: Mean, Sum and Missing Data](docs/theory/03-scale-scores.md) |
-| [Scales, Categories and Scoring](docs/help/04-scales-and-scoring.md) | [Principles of Survey Data Cleaning](docs/theory/04-data-cleaning-principles.md) |
+| [Scales and Scoring](docs/help/04-scales-and-scoring.md) | [Principles of Survey Data Cleaning](docs/theory/04-data-cleaning-principles.md) |
 | [Computing Scores and Exporting](docs/help/05-compute-and-export.md) | [Tidy Data and Why Column Names Matter](docs/theory/05-tidy-data.md) |
 | [Console Commands](docs/help/06-console-commands.md) | |
 | [Sample Data](docs/help/07-sample-data.md) | |
@@ -263,9 +265,9 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `GET` | `/api/export_cleaning_rules` | Download `cleaning_rules.json` |
 | `POST` | `/api/apply_cleaning_rules_file` | Replay a saved recipe |
 | `POST` | `/api/create_scale`, `/api/delete_scale` | Manage scale definitions |
-| `POST` | `/api/categorise` | Save column categories |
-| `GET` | `/api/groups` | The group tree |
+| `GET` | `/api/groups` | The group tree, per-column assignments, ungrouped list |
 | `POST` | `/api/groups/create`, `/api/groups/update`, `/api/groups/delete` | Edit the tree |
+| `POST` | `/api/groups/assign` | Set each column's group directly |
 | `POST` | `/api/groups/eligible` | Columns a group or subgroup may take |
 | `POST` | `/api/groups/resolve_spec` | Resolve a typed column spec |
 | `POST` | `/api/numerise` | Rename scale columns with a prefix |
@@ -280,13 +282,14 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Twenty-two end-to-end tests drive the HTTP API with the bundled samples: the full clean →
-categorise → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
+Twenty-four end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
 tidying, collision warnings, and the guarantee that a preview leaves the dataset
 untouched), and field groups (the subgroup containment rule, column moves, subgroup
-trimming, survival through renames and Categorise edits, and the spec parser).
+trimming, per-column assignment including the parent implication, survival through
+renames and scale deletion, and the spec parser).
 
 ---
 

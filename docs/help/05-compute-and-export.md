@@ -8,7 +8,7 @@
 | --- | --- |
 | Target Column Name | The new column. Name it after the construct: `Wellbeing_Mean`. |
 | Calculation Function | Mean, Sum, Minimum, Maximum or Standard Deviation. |
-| Scale Items | Every column categorised under a scale, all ticked by default. |
+| Scale Items | Every column in a scale group, all ticked by default. Untick down to one subgroup to score a subscale. |
 
 The selected columns are converted to numbers first, so a stray text answer becomes blank rather than an error. Blanks are skipped: a mean over five items where one is missing is the mean of the four that are present. [Scale Scores](/docs/theory/scale-scores) explains when that is the right choice and when it is not.
 
@@ -16,7 +16,7 @@ The new column arrives as *Uncategorised*, so it will not be swept into a later 
 
 ### Worked example
 
-With `WB1`–`WB5` categorised under `Scale: Wellbeing` and reverse items already scored:
+With `WB1`–`WB5` in the `Wellbeing` group and reverse items already scored:
 
 - Target Column Name: `Wellbeing_Mean`
 - Function: Mean (Average)

@@ -1,9 +1,13 @@
-"""Scale definitions, column categorisation, numerisation and scoring."""
+"""Scales, numerisation and scoring.
+
+A scale *is* a root group of kind ``scale`` (see :mod:`cpdm.core.groups`), so
+the two entries in the Scales menu are thin wrappers over the group tree.
+"""
 
 import pandas as pd
 
 from cpdm.core import groups
-from cpdm.core.dataset import SCALE_PREFIX, UNCATEGORISED
+from cpdm.core.dataset import KIND_SCALE
 
 DIRECT = "Direct"
 REVERSE = "Reverse"
@@ -11,35 +15,16 @@ REVERSE = "Reverse"
 
 # --- scale definitions ---------------------------------------------------
 def add_scale(dataset, scale_name):
-    scale_name = (scale_name or "").strip()
-    if not scale_name:
-        raise ValueError("Scale name cannot be empty.")
-    if scale_name in dataset.defined_scales:
-        raise ValueError(f"Scale '{scale_name}' already exists.")
-    dataset.defined_scales.append(scale_name)
+    """Create an empty scale, ready for columns in Fields -> Groups."""
+    groups.create_group(dataset, scale_name, kind=KIND_SCALE, columns=[])
     return dataset.defined_scales
 
 
 def delete_scale(dataset, scale_name):
-    """Remove a scale; its columns fall back to Uncategorised."""
-    if scale_name in dataset.defined_scales:
-        dataset.defined_scales.remove(scale_name)
-        target = SCALE_PREFIX + scale_name
-        for col, category in dataset.categories.items():
-            if category == target:
-                dataset.categories[col] = UNCATEGORISED
-
-        # the scale's group, and any subscales under it, go with it
-        if groups.find(dataset, scale_name):
-            groups.delete_group(dataset, scale_name)
+    """Remove a scale, its subscales, and their hold on any columns."""
+    if groups.find(dataset, scale_name):
+        groups.delete_group(dataset, scale_name)
     return dataset.defined_scales
-
-
-def set_categories(dataset, categories):
-    """Save the flat categorisation, then rebuild the group tree from it."""
-    dataset.categories = dict(categories or {})
-    groups.rebuild_from_categories(dataset)
-    return dataset.categories
 
 
 # --- numerisation --------------------------------------------------------

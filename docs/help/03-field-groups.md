@@ -1,8 +1,13 @@
 # Field Groups and Subgroups
 
-**Fields → Groups & Subgroups** is where you say what your columns *are*. A **group** is a construct — Demographics, Wellbeing, Digital Stress. A **subgroup** is a facet of the group above it, which for a questionnaire usually means a subscale.
+**Fields → Groups** is where you say what your columns *are*. A **group** is a construct — Demographics, Wellbeing, Digital Stress. A **subgroup** is a facet of the group above it, which for a questionnaire usually means a subscale.
 
 The rule that shapes everything here: a subgroup can only hold columns its parent already holds. Nesting can go deeper than two levels, and the rule applies at each one, so every subgroup's columns belong to its root group.
+
+The dialogue has two tabs, and they edit the same thing from opposite ends:
+
+- **Build groups** — make a group, then choose its columns. Best when you think in constructs.
+- **Assign columns** — one row per column with a dropdown of every group. Best when you have a wide table and just need everything filed. The counter at the top right says how many columns are still ungrouped.
 
 ## Creating a group
 
@@ -32,16 +37,21 @@ Names are matched case-insensitively, and an exact column name always wins over 
 
 Ranges use positions in the table, so `WB1:WB5` picks up everything sitting between those two columns even if one of them is named differently. Check the ticked boxes afterwards.
 
-## How groups relate to Categorise
+## Assigning columns one by one
 
-They are two views of the same thing, kept in step:
+The **Assign columns** tab lists every column with a dropdown of the whole tree, subgroups indented under their parents. Search to narrow the list, tick *only ungrouped* to see what is left to do, then **Save assignments** — nothing is written until you do, and the footer counts your unsaved changes.
 
-- Saving a group rewrites the flat categorisation that Scoring, Numerise and Compute read. Every column of a scale-kind root — including the ones inside its subgroups — gets the category `Scale: <group name>`, so a scale still behaves as one scale.
-- Editing **Fields → Categorise** rebuilds the root groups from your choices, keeping any subgroups whose columns are still inside the same root.
+Picking a subgroup files the column under its parent too, because a subgroup's columns are always part of its parent. Picking *— ungrouped —* takes the column out of every group at once.
 
-So subscale membership lives only in the group tree. That is deliberate: splitting a scale into subscales should not stop you scoring or averaging the scale as a whole.
+Create the groups under **Build groups** first; the dropdown can only offer groups that exist.
 
-Deleting a scale under **Scales → Create Scale** also removes its group and any subgroups beneath it. Deleting a group never touches the data — the columns simply become Uncategorised.
+## What groups drive
+
+The group tree is the only place column membership is decided. Everything else reads a flat picture derived from it: each column of a scale-kind root — including the ones inside its subgroups — counts as `Scale: <group name>`, which is what Scoring, Numerise and Compute work from.
+
+So subscale membership lives only in the tree. That is deliberate: splitting a scale into subscales should not stop you scoring or averaging the scale as a whole. A subscale score is simply a Compute run over the columns of one subgroup.
+
+Deleting a scale under **Scales → Create Scale** removes its group and any subgroups beneath it. Deleting a group never touches the data — the columns simply become ungrouped.
 
 ## Two rules the editor enforces for you
 
@@ -73,4 +83,4 @@ After cleaning `sample_survey.xlsx` (see [Sample Data](/docs/help/sample-data)):
 5. **+ Sub** on Wellbeing → `Negative affect`, spec `WB3, WB5` — the two reverse-keyed items.
 6. **+ New group** → `Admin`, kind *Other*, spec `Timestamp, Name, Comments`, so those columns are filed away but stay out of scoring.
 
-From here, [Scales, Categories and Scoring](/docs/help/scales-and-scoring) and [Computing Scores](/docs/help/compute-and-export) work exactly as before — and a subscale mean is just a Compute run over the columns of one subgroup.
+From here, [Scales and Scoring](/docs/help/scales-and-scoring) and [Computing Scores](/docs/help/compute-and-export) work exactly as before — and a subscale mean is just a Compute run over the columns of one subgroup.

@@ -10,12 +10,29 @@ bp = Blueprint("groups_api", __name__, url_prefix="/api")
 
 @api_route(bp, "/groups", methods=["GET"])
 def list_groups():
+    """The tree, plus the per-column view the assignment list is built from."""
     session = state.session
+    has_file = session.df is not None
+    columns = list(session.df.columns) if has_file else []
+
     return jsonify({
         "groups": groups.tree(session),
         "kinds": [{"value": kind, "label": groups.KIND_LABELS[kind]} for kind in groups.KINDS],
-        "cols": list(session.df.columns) if session.df is not None else [],
+        "cols": columns,
+        "assignments": {col: groups.group_of(session, col) for col in columns},
+        "ungrouped": groups.ungrouped_columns(session) if has_file else [],
     })
+
+
+@api_route(bp, "/groups/assign", methods=["POST"])
+def assign():
+    """Set each column's group directly — the quick, per-column route."""
+    result = groups.assign_columns(state.session, payload().get("assignments", {}))
+    return ok(
+        assigned=result["assigned"],
+        cleared=result["cleared"],
+        groups=groups.tree(state.session),
+    )
 
 
 @api_route(bp, "/groups/eligible", methods=["POST"])

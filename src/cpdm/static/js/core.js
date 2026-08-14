@@ -90,6 +90,112 @@ function refreshStatus() {
     }).catch(() => {});
 }
 
+/* --- keyboard for the column pickers ----------------------------------- */
+
+/* Both the trimming wizard and the group editor show the same list of
+   tickable columns. These helpers give it roving focus so the whole thing can
+   be driven from the keyboard: type to filter, Enter to take the matches,
+   arrows to walk the list, Space to tick, Shift to extend.
+
+   A controller supplies: names() -> the visible column names in order,
+   has(name), set(name, on), redraw(), and a state object to hold the anchor
+   and the focused row across redraws. */
+
+function focusColumnRow(container, index) {
+    const rows = container.querySelectorAll('.col-pick');
+    if (!rows.length) return;
+    const target = rows[Math.max(0, Math.min(index, rows.length - 1))];
+    target.focus();
+    target.scrollIntoView({ block: 'nearest' });
+}
+
+/* Restore the focused row after a redraw replaced the list. */
+function restoreColumnFocus(containerId, state) {
+    if (state.focusRow === null || state.focusRow === undefined) return;
+    const container = document.getElementById(containerId);
+    if (container) focusColumnRow(container, state.focusRow);
+}
+
+function setColumnRange(ctrl, from, to, on) {
+    const names = ctrl.names();
+    const [low, high] = [from, to].sort((a, b) => a - b);
+    for (let i = low; i <= high; i += 1) ctrl.set(names[i], on);
+}
+
+function columnListKeys(event, ctrl) {
+    const container = event.currentTarget;
+    const names = ctrl.names();
+    if (!names.length) return;
+
+    const row = event.target.closest('.col-pick');
+    const index = row ? Number(row.dataset.row) : 0;
+    const state = ctrl.state;
+
+    const move = step => {
+        event.preventDefault();
+        const next = Math.max(0, Math.min(index + step, names.length - 1));
+        state.focusRow = next;
+        focusColumnRow(container, next);
+    };
+
+    switch (event.key) {
+        case 'ArrowDown': return move(1);
+        case 'ArrowUp': return move(-1);
+        case 'PageDown': return move(10);
+        case 'PageUp': return move(-10);
+        case 'Home': return move(-names.length);
+        case 'End': return move(names.length);
+        case ' ':
+        case 'Enter': {
+            event.preventDefault();
+            const on = !ctrl.has(names[index]);
+            if (event.shiftKey && state.anchor !== null && state.anchor !== undefined) {
+                setColumnRange(ctrl, state.anchor, index, on);
+            } else {
+                ctrl.set(names[index], on);
+            }
+            state.anchor = index;
+            state.focusRow = index;
+            ctrl.redraw();
+            return;
+        }
+        case 'a':
+            if (event.ctrlKey || event.metaKey) {
+                event.preventDefault();
+                names.forEach(name => ctrl.set(name, true));
+                ctrl.redraw();
+            }
+            return;
+        default:
+    }
+}
+
+function columnSearchKeys(event, ctrl) {
+    const names = ctrl.names();
+
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        names.forEach(name => ctrl.set(name, !event.shiftKey));
+        ctrl.redraw();
+        return;
+    }
+    if (event.key === 'ArrowDown' && names.length) {
+        event.preventDefault();
+        ctrl.state.focusRow = 0;
+        focusColumnRow(document.getElementById(ctrl.containerId), 0);
+        return;
+    }
+    if (event.key === 'Escape' && event.target.value) {
+        event.stopPropagation();          // clear the filter, keep the dialogue
+        event.target.value = '';
+        ctrl.redraw();
+    }
+}
+
+const COLUMN_LIST_HINT =
+    'Type to filter, <strong>Enter</strong> takes the matches (<strong>Shift+Enter</strong> drops them), '
+    + '<strong>↓</strong> into the list, <strong>Space</strong> ticks, <strong>Shift+Space</strong> extends.';
+
 document.addEventListener('DOMContentLoaded', () => {
     refreshStatus();
     document.addEventListener('keydown', event => {

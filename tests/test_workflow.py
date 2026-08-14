@@ -846,6 +846,139 @@ def test_value_replacement_keeps_blanks_blank():
     assert all(option["label"] != "nan" for option in created["options"])
 
 
+def test_scale_definitions_travel_between_datasets():
+    """Save a scale, load it onto the next wave, keying and all."""
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+    client.post("/api/create_scale", json={"group": "Wellbeing", "name": "WEMWBS"})
+    client.post("/api/scales/items",
+                json={"name": "WEMWBS", "items": {"WB3": "Reverse", "WB5": "Reverse"}})
+
+    exported = client.get("/api/scales/export")
+    assert exported.status_code == 200
+    payload = json.loads(exported.data.decode("utf-8"))
+    assert payload["kind"] == "cpdm-scales"
+    definition = payload["scales"][0]
+    assert definition["name"] == "WEMWBS" and definition["group"] == "Wellbeing"
+    assert [item["type"] for item in definition["items"]] == [
+        "Direct", "Direct", "Reverse", "Direct", "Reverse"]
+
+    # a fresh session, same questionnaire
+    client = fresh_client()
+    upload(client, "sample_survey_wave2.csv")
+    apply_recipe(client)
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+
+    result = client.post(
+        "/api/scales/import",
+        data={"file": (io.BytesIO(exported.data), "scales.json")},
+        content_type="multipart/form-data",
+    ).get_json()["results"][0]
+
+    assert result["loaded"] and result["group"] == "Wellbeing"
+    detail = client.get("/api/scales/WEMWBS").get_json()
+    assert [item["type"] for item in detail["items"]] == [
+        "Direct", "Direct", "Reverse", "Direct", "Reverse"]
+    assert [option["score"] for option in detail["options"]] == [1, 2, 3, 4, 5]
+    # loading scored the data on the way in
+    assert pd.api.types.is_numeric_dtype(state.session.df["WB3"])
+
+
+def test_loading_scales_reports_what_it_could_not_do():
+    client = fresh_client()
+    prepared_survey(client)
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+    client.post("/api/create_scale", json={"group": "Wellbeing", "name": "WEMWBS"})
+    exported = client.get("/api/scales/export").data
+
+    # loading the same file again: the scale is already here
+    again = client.post(
+        "/api/scales/import",
+        data={"file": (io.BytesIO(exported), "scales.json")},
+        content_type="multipart/form-data",
+    ).get_json()["results"][0]
+    assert not again["loaded"] and "already exists" in again["reason"]
+
+    # a dataset without those columns cannot take it
+    client = fresh_client()
+    upload(client, "sample_survey.csv")          # untrimmed headers
+    missing = client.post(
+        "/api/scales/import",
+        data={"file": (io.BytesIO(exported), "scales.json")},
+        content_type="multipart/form-data",
+    ).get_json()["results"][0]
+    assert not missing["loaded"] and "no group here holds its columns" in missing["reason"]
+
+    # and a file that is not a scale file is refused outright
+    junk = client.post(
+        "/api/scales/import",
+        data={"file": (io.BytesIO(b'{"kind": "something-else"}'), "x.json")},
+        content_type="multipart/form-data",
+    )
+    assert junk.status_code == 400 and "not a CPDM scale file" in junk.get_json()["error"]
+
+
+def test_loading_can_be_pointed_at_a_group_by_hand():
+    """A scale saved after renaming its items still loads, onto a chosen group."""
+    client = fresh_client()
+    prepared_survey(client)
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+    client.post("/api/create_scale",
+                json={"group": "Wellbeing", "name": "WEMWBS", "rename": True})
+    client.post("/api/scales/items",
+                json={"name": "WEMWBS", "items": {"WEMWBS_3": "Reverse"}})
+    saved = json.loads(client.get("/api/scales/export").data.decode("utf-8"))
+
+    # wave 2 has the untouched WB1..WB5 headers, so nothing matches by name
+    client = fresh_client()
+    upload(client, "sample_survey_wave2.csv")
+    apply_recipe(client)
+    client.post("/api/groups/create", json={"name": "Items", "spec": "WB1:WB5"})
+
+    inspected = client.post("/api/scales/inspect_file", json={"payload": saved}).get_json()
+    entry = inspected["scales"][0]
+    assert entry["suggested_group"] is None and not entry["can_create_group"]
+    assert [group["name"] for group in inspected["groups"]] == ["Items"]
+
+    result = client.post("/api/scales/import", json={
+        "payload": saved, "mapping": {"WEMWBS": "Items"}}).get_json()["results"][0]
+
+    assert result["loaded"] and result["group"] == "Items"
+    assert result["items_by_position"] == 5      # headers differ, keying by position
+    detail = client.get("/api/scales/WEMWBS").get_json()
+    assert [item["type"] for item in detail["items"]] == [
+        "Direct", "Direct", "Reverse", "Direct", "Direct"]
+
+    # and skipping is honoured
+    client.post("/api/delete_scale", json={"scale_name": "WEMWBS"})
+    skipped = client.post("/api/scales/import", json={
+        "payload": saved, "mapping": {"WEMWBS": ""}}).get_json()["results"][0]
+    assert not skipped["loaded"] and skipped["reason"] == "skipped"
+
+
+def test_loading_builds_the_group_when_the_columns_are_there():
+    client = fresh_client()
+    prepared_survey(client)
+    client.post("/api/groups/create", json={"name": "Wellbeing", "spec": "WB1:WB5"})
+    client.post("/api/create_scale", json={"group": "Wellbeing", "name": "WEMWBS"})
+    exported = client.get("/api/scales/export").data
+
+    # same columns, but no groups at all this time
+    client = fresh_client()
+    prepared_survey(client)
+    result = client.post(
+        "/api/scales/import",
+        data={"file": (io.BytesIO(exported), "scales.json")},
+        content_type="multipart/form-data",
+    ).get_json()["results"][0]
+
+    assert result["loaded"] and result["group_matched"] == "new group from the file"
+    assert groups.find(state.session, "Wellbeing")["columns"] == [
+        "WB1", "WB2", "WB3", "WB4", "WB5"]
+
+
 def test_scale_declaration_rules():
     client = fresh_client()
     prepared_survey(client)

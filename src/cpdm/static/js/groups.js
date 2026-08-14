@@ -187,9 +187,10 @@ function renderGroupsEditor() {
             </span>
         </div>
         <input type="text" id="group-search" placeholder="Search columns..."
-               style="width:100%; margin:6px 0; font-size:12px;" oninput="renderGroupsColumns()">
-        <div id="group-columns" class="trimmer-cols"></div>
-        <div class="muted" style="margin-top:6px;">Shift-click to select a range.</div>
+               style="width:100%; margin:6px 0; font-size:12px;"
+               oninput="renderGroupsColumns()" onkeydown="groupsSearchKeys(event)">
+        <div id="group-columns" class="trimmer-cols" onkeydown="groupsListKeys(event)"></div>
+        <div class="muted" style="margin-top:6px;">${COLUMN_LIST_HINT} Shift-click works too.</div>
 
         <div style="display:flex; gap:8px; margin-top:14px;">
             <button class="btn btn-primary" onclick="groupsSave()">
@@ -198,6 +199,7 @@ function renderGroupsEditor() {
         </div>`;
 
     renderGroupsColumns();
+    document.getElementById('group-name').focus();
 }
 
 function renderGroupsColumns() {
@@ -215,14 +217,16 @@ function renderGroupsColumns() {
             : '';
 
         return `
-            <label class="col-pick" title="${escapeHtml(col)}">
+            <label class="col-pick" tabindex="0" data-row="${index}" title="${escapeHtml(col)}">
                 <span class="col-index">${position}</span>
-                <input type="checkbox" ${groupsUI.selected.has(col) ? 'checked' : ''}
+                <input type="checkbox" tabindex="-1" ${groupsUI.selected.has(col) ? 'checked' : ''}
                        onclick="groupsToggleColumn(${index}, event)">
                 <span class="col-pick-name">${escapeHtml(col)}</span>
                 ${tableNote}
             </label>`;
     }).join('') || '<div class="muted">No columns available.</div>';
+
+    restoreColumnFocus('group-columns', groupsUI);
 
     const count = document.getElementById('group-col-count');
     if (count) count.textContent = `— ${groupsUI.selected.size} of ${groupsUI.eligible.length} selected`;
@@ -247,6 +251,18 @@ function groupsToggleColumn(index, event) {
     groupsUI.anchor = index;
     renderGroupsColumns();
 }
+
+const groupsListCtrl = {
+    containerId: 'group-columns',
+    state: groupsUI,
+    names: () => groupsUI.visible || [],
+    has: name => groupsUI.selected.has(name),
+    set: (name, on) => { if (on) groupsUI.selected.add(name); else groupsUI.selected.delete(name); },
+    redraw: () => renderGroupsColumns()
+};
+
+function groupsListKeys(event) { columnListKeys(event, groupsListCtrl); }
+function groupsSearchKeys(event) { columnSearchKeys(event, groupsListCtrl); }
 
 function groupsSelectAll(all) {
     (groupsUI.visible || groupsUI.eligible).forEach(col => {

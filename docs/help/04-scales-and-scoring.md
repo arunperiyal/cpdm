@@ -67,11 +67,28 @@ You can redo it as often as you like. CPDM keeps each item's original answers th
 
 **Scales → View Scoring** shows what the scoring currently does: per item, its keying, how many cells are scored, how many are blank, and — in yellow — any answer the option list does not cover. Those cells are blank, so an entry there usually means an option is missing or spelled differently. Each scale has an *Edit scoring* button next to it.
 
+## Save Scale / Load Scale
+
+**Scales → Save Scale (.json)** writes every declared scale to `scales.json`: its name, the group it reads, its items and their keying, and its ordered options with their scores. It is a definition of the instrument, not of your data.
+
+**Scales → Load Scale (.json)** brings one back. The dialogue lists what the file holds and where each scale can go here:
+
+- if a group of the saved name exists, it is matched to that;
+- failing that, a group whose columns are exactly the saved ones;
+- failing that, the group is built from the saved column names, if this dataset has them;
+- and where none of those work, you pick the group from the list yourself.
+
+Item keying travels **by column name, falling back to position**. So a nine-item instrument keeps its reverse-keyed items in the right places even when the headers differ — which is what happens when the saved scale had renamed its items and the new wave has not. Loading scores the data as it goes, exactly as defining a scale by hand would.
+
+A scale whose name is already declared here is skipped and said so, rather than overwriting what you have.
+
 ## Order of operations
 
 ```
 Groups  →  Create Scale  →  Assign Scoring  →  Assign Scoring Type  →  Compute
                                   (View Scoring to check)
+
+second wave:  Groups  →  Load Scale  →  Compute
 ```
 
 You no longer need to convert Likert text to numbers in the cleaning wizard — the scale does it, per scale, on exact whole-cell matches. Clean the text so the answers are consistent, then let the scale score them.

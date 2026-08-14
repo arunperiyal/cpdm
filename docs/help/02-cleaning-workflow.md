@@ -25,7 +25,23 @@ Add as many as you need with **+ Add rule**; they run top to bottom, and the arr
 
 ### Target columns
 
-The right-hand list picks which columns the stage touches. Search to filter, use **All** / **None**, and shift-click to select a contiguous range — handy for "just the nine item columns". Columns already marked ignored in the header-mapping wizard start unticked; in the values stage, numeric columns are greyed out because they hold no text to trim.
+The right-hand list picks which columns the stage touches. Columns already marked ignored in the header-mapping wizard start unticked; in the values stage, numeric columns are greyed out because they hold no text to trim.
+
+It is quicker from the keyboard, and the dialogue opens with the search box focused:
+
+| Key | In the search box | In the list |
+| --- | --- | --- |
+| typing | filters the list | — |
+| **Enter** | ticks every column matching the filter | ticks the focused column |
+| **Shift+Enter** | unticks every match | — |
+| **↓** | jumps into the list | next column |
+| **↑ / PageUp / PageDown / Home / End** | — | move through the list |
+| **Space** | — | tick or untick |
+| **Shift+Space** | — | extend from the last one you touched |
+| **Ctrl+A** | — | tick everything listed |
+| **Esc** | clears the filter | closes the dialogue |
+
+So `WB` then Enter selects the five wellbeing items and nothing else. Shift-click still works, and the same keys drive the column list in Fields → Groups.
 
 ### Preview
 

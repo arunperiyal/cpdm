@@ -472,3 +472,111 @@ function renameScaleItems(name) {
         })
         .catch(reportError);
 }
+
+/* --- saving and loading scale definitions ------------------------------- */
+
+function exportScales() {
+    getState().then(state => {
+        if (!state.defined_scales.length) {
+            logError('No scales to save yet.');
+            return;
+        }
+        log('> Generating scales .json download...', 'info');
+        window.location.href = '/api/scales/export';
+    }).catch(reportError);
+}
+
+function triggerScaleFileSelect() { document.getElementById('scale-file-input').click(); }
+
+/* The file is read in the browser so the placement dialogue and the load
+   itself work from the same contents without stashing it on the server. */
+let pendingScaleFile = null;
+
+function loadScaleFile() {
+    const input = document.getElementById('scale-file-input');
+    if (!input.files.length) return;
+    const file = input.files[0];
+
+    file.text()
+        .then(text => {
+            pendingScaleFile = JSON.parse(text);
+            return apiPost('/api/scales/inspect_file', { payload: pendingScaleFile });
+        })
+        .then(data => {
+            renderScaleFileChoices(file.name, data);
+            openModal('modal-load-scale');
+        })
+        .catch(error => reportError(
+            error instanceof SyntaxError ? new Error('That file is not valid JSON.') : error))
+        .finally(() => { input.value = ''; });
+}
+
+function renderScaleFileChoices(filename, data) {
+    if (!data.scales.length) {
+        document.getElementById('load-scale-body').innerHTML =
+            '<div class="muted">That file holds no scales.</div>';
+        return;
+    }
+
+    document.getElementById('load-scale-body').innerHTML = `
+        <div class="hint-box">
+            <strong>${escapeHtml(filename)}</strong>
+            <span>Each scale needs a group here to read. CPDM matches by group name, then by
+            columns; where it cannot, choose the group yourself — the item keying is carried
+            over by name, or by position when the headers differ.</span>
+        </div>
+        ${data.scales.map((entry, index) => {
+            const options = data.groups.map(group =>
+                `<option value="${escapeHtml(group.name)}" ${group.name === entry.suggested_group ? 'selected' : ''}>
+                    ${escapeHtml(group.name)} (${group.column_count} col)
+                 </option>`).join('');
+            const auto = entry.suggested_group
+                ? `matched '${escapeHtml(entry.suggested_group)}' ${escapeHtml(entry.suggested_reason || '')}`
+                : (entry.can_create_group
+                    ? 'its own columns are here, so the group can be built from the file'
+                    : 'no automatic match');
+
+            return `
+                <div class="form-row" style="align-items:flex-start;">
+                    <div style="flex:1;">
+                        <strong>${escapeHtml(entry.name)}</strong>
+                        <span class="muted" style="display:block;">
+                            ${entry.items} item(s), ${entry.options} option(s) — ${auto}
+                        </span>
+                        ${entry.already_here ? '<span class="diff-warn">already declared here; it will be skipped</span>' : ''}
+                    </div>
+                    <select class="scale-target" data-scale="${escapeHtml(entry.name)}"
+                            ${entry.already_here ? 'disabled' : ''} style="min-width:200px;">
+                        ${entry.suggested_group || entry.can_create_group
+                            ? '<option value="">— as matched above —</option>' : ''}
+                        ${options}
+                        <option value="__skip__">— skip this scale —</option>
+                    </select>
+                </div>`;
+        }).join('')}`;
+}
+
+function submitLoadScales() {
+    const mapping = {};
+    document.querySelectorAll('.scale-target').forEach(select => {
+        if (select.disabled) return;
+        if (select.value === '__skip__') mapping[select.dataset.scale] = '';
+        else if (select.value) mapping[select.dataset.scale] = select.value;
+    });
+
+    apiPost('/api/scales/import', { payload: pendingScaleFile, mapping })
+        .then(data => {
+            data.results.filter(result => result.loaded).forEach(result => {
+                const byPosition = result.items_by_position
+                    ? `, ${result.items_by_position} item(s) keyed by position`
+                    : '';
+                log(`[SUCCESS] Loaded '${escapeHtml(result.scale)}' onto group '${escapeHtml(result.group)}' (${escapeHtml(result.group_matched)}): ${result.items} item(s), ${result.options} option(s)${byPosition}.`, 'success');
+            });
+            data.results.filter(result => !result.loaded).forEach(result => {
+                log(`[INFO] Skipped '${escapeHtml(result.scale)}' — ${escapeHtml(result.reason)}.`, 'info');
+            });
+            closeModal('modal-load-scale');
+            refreshStatus();
+        })
+        .catch(reportError);
+}

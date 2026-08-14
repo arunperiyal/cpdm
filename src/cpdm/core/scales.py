@@ -24,6 +24,9 @@ Where a scale is declared on a group *and* on a group nested inside it, the
 deeper one wins for the columns they share (see ``Dataset.refresh_categories``).
 """
 
+import io
+import json
+
 import pandas as pd
 
 from cpdm.core import groups
@@ -243,6 +246,186 @@ def delete_scale(dataset, name):
     dataset.scales = [entry for entry in dataset.scales if entry["name"] != name]
     dataset.refresh_categories()
     return {"defined_scales": dataset.defined_scales, "restored": restored}
+
+
+# --- saving and loading definitions ---------------------------------------
+SCALE_FILE_KIND = "cpdm-scales"
+SCALE_FILE_VERSION = 1
+SCALE_FILENAME = "scales.json"
+
+
+def export_definitions(dataset, names=None):
+    """The scales as a portable definition: options, keying and item names."""
+    chosen = names or dataset.defined_scales
+    definitions = []
+
+    for name in chosen:
+        scale = require_scale(dataset, name)
+        detail = describe(dataset, name)
+        definitions.append({
+            "name": scale["name"],
+            "group": scale["group"],
+            "columns": scale_columns(dataset, scale),
+            "options": [dict(option) for option in detail["options"]],
+            "items": [dict(item) for item in detail["items"]],
+        })
+
+    payload = {
+        "kind": SCALE_FILE_KIND,
+        "version": SCALE_FILE_VERSION,
+        "source_file": dataset.filename,
+        "scales": definitions,
+    }
+    stream = io.BytesIO(json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8"))
+    return stream, SCALE_FILENAME
+
+
+def _target_group(dataset, definition, create=True):
+    """Find, or build, the group a saved scale should read.
+
+    A definition travels between datasets, so match on the group name first,
+    then on the exact set of columns, and failing both build the group from
+    the saved column names if this dataset has them.
+    """
+    group = dataset.find_group(definition.get("group", ""))
+    if group is not None:
+        return group, "by group name"
+
+    saved_columns = [col for col in definition.get("columns", [])]
+    if saved_columns:
+        for candidate in dataset.groups:
+            if candidate["columns"] == saved_columns:
+                return candidate, "by matching columns"
+
+        live = set(dataset.df.columns)
+        if create and all(col in live for col in saved_columns):
+            created = groups.create_group(
+                dataset, definition.get("group") or definition["name"],
+                columns=saved_columns,
+            )
+            return created["group"], "new group from the file"
+        if not create and all(col in live for col in saved_columns):
+            return None, "new group from the file"
+
+    return None, None
+
+
+def _require_file(payload):
+    if not isinstance(payload, dict) or payload.get("kind") != SCALE_FILE_KIND:
+        raise ValueError("That is not a CPDM scale file.")
+    return payload
+
+
+def inspect_file(dataset, payload):
+    """What a scale file holds, and where each scale could go in this dataset.
+
+    A definition saved after its items were renamed will not match a fresh
+    dataset by column name, so the loader offers the groups it could be put on
+    instead of quietly skipping it.
+    """
+    dataset.require_df()
+    _require_file(payload)
+
+    free_groups = [
+        {"name": group["name"], "column_count": len(group["columns"])}
+        for group in dataset.groups if not groups.scale_on(dataset, group["name"])
+    ]
+
+    entries = []
+    for definition in payload.get("scales", []):
+        name = str(definition.get("name", "")).strip()
+        if not name:
+            continue
+        group, matched = _target_group(dataset, definition, create=False)
+        saved_columns = definition.get("columns", [])
+        entries.append({
+            "name": name,
+            "saved_group": definition.get("group"),
+            "saved_columns": saved_columns,
+            "items": len(definition.get("items", [])),
+            "options": len(definition.get("options", [])),
+            "suggested_group": group["name"] if group else None,
+            "suggested_reason": matched,
+            "can_create_group": bool(saved_columns) and all(
+                col in set(dataset.df.columns) for col in saved_columns
+            ),
+            "already_here": find_scale(dataset, name) is not None,
+        })
+
+    return {"scales": entries, "groups": free_groups}
+
+
+def import_definitions(dataset, payload, mapping=None):
+    """Load saved scales onto this dataset, matching groups and items.
+
+    ``mapping`` names the group each scale should read, for the cases the
+    automatic match cannot work out; an empty value there means "skip".
+    """
+    dataset.require_df()
+    _require_file(payload)
+
+    mapping = mapping or {}
+    results = []
+
+    for definition in payload.get("scales", []):
+        name = str(definition.get("name", "")).strip()
+        if not name:
+            continue
+
+        if find_scale(dataset, name):
+            results.append({"scale": name, "loaded": False,
+                            "reason": "a scale of that name already exists"})
+            continue
+
+        if name in mapping:
+            chosen = mapping[name]
+            if not chosen:
+                results.append({"scale": name, "loaded": False,
+                                "reason": "skipped"})
+                continue
+            group, matched = groups.require(dataset, chosen), "chosen"
+        else:
+            group, matched = _target_group(dataset, definition)
+
+        if group is None:
+            results.append({"scale": name, "loaded": False,
+                            "reason": "no group here holds its columns"})
+            continue
+        if groups.scale_on(dataset, group["name"]):
+            results.append({"scale": name, "loaded": False,
+                            "reason": f"group '{group['name']}' already has a scale"})
+            continue
+
+        scale = create_scale(dataset, group["name"], name)
+        set_options(dataset, name, definition.get("options", []))
+
+        # keying travels by column name, falling back to position so the same
+        # instrument keeps its pattern under different headers
+        columns = scale_columns(dataset, scale)
+        saved_items = definition.get("items", [])
+        by_name = {item.get("column"): item.get("type") for item in saved_items}
+
+        types = {}
+        matched_by_position = 0
+        for index, column in enumerate(columns):
+            if column in by_name:
+                types[column] = by_name[column]
+            elif index < len(saved_items):
+                types[column] = saved_items[index].get("type", DIRECT)
+                matched_by_position += 1
+        set_item_types(dataset, name, {c: t for c, t in types.items() if t in TYPES})
+
+        results.append({
+            "scale": name,
+            "loaded": True,
+            "group": group["name"],
+            "group_matched": matched,
+            "items": len(columns),
+            "items_by_position": matched_by_position,
+            "options": len(definition.get("options", [])),
+        })
+
+    return results
 
 
 def scale_summary(dataset):

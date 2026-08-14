@@ -36,6 +36,8 @@ Your browser opens at `http://127.0.0.1:5000/`. Everything runs on your machine;
 
 Clean → Save Cleaning File (.json) writes down the header renames, value replacements and ignored columns you just made. When a second wave of the same questionnaire arrives, open it and use Clean → Apply Cleaning File (.json) to repeat that work exactly. Try it with `sample_survey_wave2.csv`.
 
+Scales → Save Scale (.json) does the same for the measurement side: the items, their keying, and the options with their scores. Load it onto the next wave and the scoring comes back with it.
+
 ## Things worth knowing early
 
 - **One dataset at a time, held in memory.** Closing the browser tab is harmless; stopping the server discards everything. Export before you quit.

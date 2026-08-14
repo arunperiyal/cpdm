@@ -1,9 +1,11 @@
 """Scales: declaring them on a group, numerising and scoring them."""
 
-from flask import Blueprint, jsonify, request
+import json
+
+from flask import Blueprint, jsonify, request, send_file
 
 from cpdm.core import groups, scales, state
-from cpdm.web.api.support import api_route, ok, payload
+from cpdm.web.api.support import api_route, ok, payload, uploaded_file
 
 bp = Blueprint("scales_api", __name__, url_prefix="/api")
 
@@ -91,6 +93,42 @@ def scoring_status():
     """What the scoring currently does — Scales -> View Scoring reads this."""
     names = payload().get("names") if request.method == "POST" else None
     return jsonify({"plans": scales.scoring_status(state.session, names)})
+
+
+@api_route(bp, "/scales/export", methods=["GET"])
+def export_scales():
+    """Download the scale definitions as a reusable JSON file."""
+    stream, filename = scales.export_definitions(
+        state.session, request.args.getlist("name") or None
+    )
+    return send_file(
+        stream, mimetype="application/json", as_attachment=True, download_name=filename
+    )
+
+
+def _scale_file():
+    """The file's contents, uploaded directly or passed through as JSON."""
+    if "file" in request.files:
+        try:
+            return json.load(request.files["file"])
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Not a valid JSON scale file: {exc}") from exc
+    body = payload().get("payload")
+    if body is None:
+        raise ValueError("No scale file supplied.")
+    return body
+
+
+@api_route(bp, "/scales/inspect_file", methods=["POST"])
+def inspect_scale_file():
+    """What the file holds, and where each scale could go here."""
+    return jsonify(scales.inspect_file(state.session, _scale_file()))
+
+
+@api_route(bp, "/scales/import", methods=["POST"])
+def import_scales():
+    mapping = payload().get("mapping") if "file" not in request.files else None
+    return ok(results=scales.import_definitions(state.session, _scale_file(), mapping))
 
 
 @api_route(bp, "/scales/rename_items", methods=["POST"])

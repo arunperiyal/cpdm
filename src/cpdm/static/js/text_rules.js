@@ -157,6 +157,25 @@ function trimmerSelectAll(all) {
     renderTrimmerColumns();
 }
 
+/* --- keyboard ----------------------------------------------------------- */
+
+const trimmerListCtrl = {
+    containerId: 'trimmer-columns',
+    state: trimmer,
+    names: () => trimmer.visible,   // one entry per rendered row
+    has: name => trimmerSelection().has(name),
+    set: (name, on) => {
+        if (trimmer.stage === 'values' && trimmer.numeric.has(name)) return;
+        const selection = trimmerSelection();
+        if (on) selection.add(name); else selection.delete(name);
+        trimmer.preview = null;
+    },
+    redraw: () => renderTrimmerColumns()
+};
+
+function trimmerListKeys(event) { columnListKeys(event, trimmerListCtrl); }
+function trimmerSearchKeys(event) { columnSearchKeys(event, trimmerListCtrl); }
+
 /* --- rendering --------------------------------------------------------- */
 
 function renderTrimmer() {
@@ -189,9 +208,10 @@ function renderTrimmer() {
                     </span>
                 </div>
                 <input type="text" id="trimmer-search" placeholder="Search columns..."
-                       style="width:100%; margin:8px 0; font-size:12px;" oninput="renderTrimmerColumns()">
-                <div id="trimmer-columns" class="trimmer-cols"></div>
-                <div class="muted" style="margin-top:6px;">Shift-click to select a range.</div>
+                       style="width:100%; margin:8px 0; font-size:12px;"
+                       oninput="renderTrimmerColumns()" onkeydown="trimmerSearchKeys(event)">
+                <div id="trimmer-columns" class="trimmer-cols" onkeydown="trimmerListKeys(event)"></div>
+                <div class="muted" style="margin-top:6px;">${COLUMN_LIST_HINT} Shift-click works too.</div>
             </div>
         </div>
 
@@ -201,6 +221,7 @@ function renderTrimmer() {
     renderTrimmerColumns();
     renderTrimmerPreview();
     renderTrimmerFooter();
+    document.getElementById('trimmer-search').focus();
 }
 
 function renderTrimmerRules() {
@@ -272,13 +293,16 @@ function renderTrimmerColumns() {
         const skipped = isValues && trimmer.numeric.has(col);
         const safe = escapeHtml(col);
         return `
-            <label class="col-pick ${skipped ? 'col-skipped' : ''}"
+            <label class="col-pick ${skipped ? 'col-skipped' : ''}" tabindex="0" data-row="${index}"
                    title="${skipped ? 'Numeric column — no text to trim' : safe}">
-                <input type="checkbox" ${selection.has(col) ? 'checked' : ''} ${skipped ? 'disabled' : ''}
+                <input type="checkbox" tabindex="-1"
+                       ${selection.has(col) ? 'checked' : ''} ${skipped ? 'disabled' : ''}
                        onclick="trimmerToggleColumn(${index}, event)">
                 <span>${safe}</span>
             </label>`;
     }).join('') || '<div class="muted">No columns match.</div>';
+
+    restoreColumnFocus('trimmer-columns', trimmer);
 
     const count = trimmerEligible().filter(col => selection.has(col)).length;
     const footer = document.getElementById('trimmer-selection-count');

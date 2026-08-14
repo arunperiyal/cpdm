@@ -71,8 +71,11 @@ columns to apply them to, and previews the result before anything is written.
 dashes and curly quotes survive; a per-rule **strict ASCII** toggle restores the older
 behaviour that removed those too.
 
-The column picker has search, all/none and shift-click range selection; numeric columns
-are excluded from the values stage automatically. **Preview** lists every header as
+The column picker is keyboard-driven: it opens focused on the search box, **Enter** takes
+every column matching the filter (**Shift+Enter** drops them), **↓** moves into the list,
+**Space** ticks, **Shift+Space** extends, **Ctrl+A** takes everything listed and **Esc**
+clears the filter. Shift-click still works, and the same keys drive the Fields → Groups
+picker. Numeric columns are excluded from the values stage automatically. **Preview** lists every header as
 before → after — warning about collisions (`Name` → `Name_1`) and about rules that would
 empty a header — or, for values, the changed-cell count per column with up to five
 examples. The ⚡ button inside the header-mapping wizard opens the same wizard at its
@@ -153,6 +156,14 @@ any answer no option covers (those cells are blank).
 **Rename items** — a scale can rename its own columns to `<scale>_1`, `<scale>_2`, … in
 column order, either as a checkbox when the scale is created or later with a prefix of
 your choosing. Clashes with columns outside the scale are refused.
+
+**Save Scale / Load Scale (.json)** — a scale definition is portable: its items and their
+keying, and its ordered options with their scores. Loading matches each saved scale to a
+group here by name, then by columns, then by building the group from the saved column
+names; where none of those work the dialogue lists what the file holds and lets you pick
+the group. Keying travels by column name and falls back to **position**, so an instrument
+keeps its reverse-keyed items in the right places even under different headers. Loading
+scores the data as it goes.
 
 ### Compute
 
@@ -307,6 +318,8 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `POST` | `/api/scales/options`, `/api/scales/options/refresh`, `/api/scales/options/autoscore` | Edit the option list |
 | `POST` | `/api/scales/items` | Direct/reverse per item |
 | `GET`/`POST` | `/api/scales/status` | What the scoring currently does |
+| `GET` | `/api/scales/export` | Download the scale definitions |
+| `POST` | `/api/scales/inspect_file`, `/api/scales/import` | Inspect and load a scale file |
 | `POST` | `/api/compute` | Row-wise statistic into a new column |
 | `POST` | `/api/command` | Console commands |
 | `GET` | `/api/docs`, `/api/docs/<section>/<slug>` | Doc listing and rendered page |
@@ -317,7 +330,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Thirty-five end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Thirty-nine end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
@@ -329,7 +342,8 @@ bad declaration, survival through renames and deletion, and the spec parser), an
 scoring (option seeding and ordering, hand-added and deliberately unscored options,
 per-item direct/reverse, the no-mutation preview, unrecognised answers being reported
 rather than dropped, blanks surviving value replacement, scoring being idempotent and
-reversible, a scale renaming its own items, and deleting a scale restoring the answers).
+reversible, a scale renaming its own items, deleting a scale restoring the answers, and
+scale definitions travelling between datasets by name, by columns and by position).
 
 ---
 

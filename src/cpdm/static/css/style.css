@@ -115,6 +115,8 @@ select, input[type="text"], input[type="number"] { background: #11111b; border: 
     cursor: pointer; user-select: none;
 }
 .col-pick:hover { border-color: #45475a; }
+.col-pick:focus { outline: none; border-color: #89b4fa; background: #1e1e2e; }
+.col-pick:focus-visible { box-shadow: 0 0 0 1px #89b4fa; }
 .col-skipped { opacity: 0.45; cursor: not-allowed; }
 
 .preview-empty {

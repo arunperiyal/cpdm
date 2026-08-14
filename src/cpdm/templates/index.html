@@ -45,6 +45,8 @@
                 <div class="dropdown-item" onclick="openAssignScoringModal()">Assign Scoring</div>
                 <div class="dropdown-item" onclick="openAssignTypesModal()">Assign Scoring Type</div>
                 <div class="dropdown-item" onclick="openViewScoringModal()">View Scoring</div>
+                <div class="dropdown-item" onclick="exportScales()">Save Scale (.json)</div>
+                <div class="dropdown-item" onclick="triggerScaleFileSelect()">Load Scale (.json)</div>
             </div>
         </div>
 
@@ -79,6 +81,7 @@
 
     <input type="file" id="file-input" accept=".xlsx,.xlsm,.csv,.tsv" style="display: none;" onchange="uploadFile()">
     <input type="file" id="rules-file-input" accept=".json" style="display: none;" onchange="applyCleaningRulesFile()">
+    <input type="file" id="scale-file-input" accept=".json" style="display: none;" onchange="loadScaleFile()">
 
     <!-- WORKSPACE -->
     <div id="workspace">
@@ -201,6 +204,18 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('modal-assign-types')">Cancel</button>
                 <button class="btn btn-primary" onclick="submitItemTypes()">Save types</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Scale: place each saved scale on a group here -->
+    <div id="modal-load-scale" class="modal">
+        <div class="modal-content" style="max-width: 760px;">
+            <div class="modal-header">Scales &#8594; Load Scale</div>
+            <div class="modal-body" id="load-scale-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-load-scale')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitLoadScales()">Load scales</button>
             </div>
         </div>
     </div>

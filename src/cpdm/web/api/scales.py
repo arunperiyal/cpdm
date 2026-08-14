@@ -1,11 +1,47 @@
-"""Numerisation and scoring. Scales are defined in Fields -> Groups."""
+"""Scales: declaring them on a group, numerising and scoring them."""
 
-from flask import Blueprint
+from flask import Blueprint, jsonify
 
-from cpdm.core import scales, state
+from cpdm.core import groups, scales, state
 from cpdm.web.api.support import api_route, ok, payload
 
 bp = Blueprint("scales_api", __name__, url_prefix="/api")
+
+
+@api_route(bp, "/scales", methods=["GET"])
+def list_scales():
+    """Declared scales, plus the groups a new one could be built on."""
+    session = state.session
+    declared = {scale["group"] for scale in session.scales}
+
+    available = []
+    if session.df is not None:
+        for group in session.groups:
+            available.append({
+                "name": group["name"],
+                "depth": session.group_depth(group),
+                "column_count": len(group["columns"]),
+                "taken_by": groups.scale_on(session, group["name"]),
+            })
+
+    return jsonify({
+        "scales": scales.list_scales(session),
+        "groups": available,
+        "has_groups": bool(available),
+    })
+
+
+@api_route(bp, "/create_scale", methods=["POST"])
+def create_scale():
+    body = payload()
+    scale = scales.create_scale(state.session, body.get("group"), body.get("name"))
+    return ok(scale=scale, defined_scales=state.session.defined_scales)
+
+
+@api_route(bp, "/delete_scale", methods=["POST"])
+def delete_scale():
+    defined = scales.delete_scale(state.session, payload().get("scale_name", ""))
+    return ok(defined_scales=defined)
 
 
 @api_route(bp, "/numerise", methods=["POST"])

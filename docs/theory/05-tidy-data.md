@@ -41,6 +41,6 @@ A computed `Wellbeing_Mean` is as much a variable as any item, and it needs the 
 
 ## What the categories buy you
 
-Marking a column as *Demographics* or *Scale: Wellbeing* does not change the data — it records what the column is *for*. That record is what lets CPDM offer the right columns in the Scoring and Compute dialogues instead of the full list, and it is what `info` prints back to you.
+Putting a column in a group, and declaring a scale on that group, does not change the data — it records what the column is *for*. That record is what lets CPDM offer the right columns in the Scoring and Compute dialogues instead of the full list, and it is what `groups`, `scales` and `info` print back to you.
 
 Doing the categorisation carefully is the cheapest error prevention available: a column that is not in a scale cannot accidentally be reverse-scored or averaged into someone else's total.

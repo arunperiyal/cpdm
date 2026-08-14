@@ -1,13 +1,13 @@
 /* Fields -> Groups: build a tree of column sets.
 
-   A root group is a construct (Demographics, Wellbeing); a subgroup is a facet
-   of its parent — a subscale — and may only take columns the parent holds.
-   Columns can be ticked in the list or typed as a spec (names, ranges, globs). */
+   Groups only organise columns; a subgroup may only take columns its parent
+   holds. Whether a group's columns are a scale is declared separately, under
+   Scales -> Create Scale. Columns can be ticked or typed as a spec. */
 
 const groupsUI = {
     view: 'build',      // 'build' = edit the tree, 'assign' = one row per column
     tree: [],
-    editing: null,      // {mode: 'create'|'edit', name, parent, kind}
+    editing: null,      // {mode: 'create'|'edit', name, parent}
     eligible: [],
     selected: new Set(),
     anchor: null,
@@ -77,7 +77,7 @@ function renderGroupsTree() {
              style="margin-left:${depth * 16}px">
             <div class="group-node-main">
                 <span class="group-name">${escapeHtml(group.name)}</span>
-                <span class="group-badge kind-${escapeHtml(group.kind)}">${escapeHtml(group.label)}</span>
+                ${group.scale ? `<span class="group-badge is-scale" title="Scale declared on this group">scale: ${escapeHtml(group.scale)}</span>` : ''}
                 <span class="muted">${group.column_count} col(s)</span>
             </div>
             <div class="group-node-actions">
@@ -99,12 +99,12 @@ function renderGroupsTree() {
 /* --- editor ------------------------------------------------------------ */
 
 function groupsNewRoot() {
-    groupsUI.editing = { mode: 'create', name: '', parent: null, kind: 'scale' };
+    groupsUI.editing = { mode: 'create', name: '', parent: null };
     groupsLoadEligible(null, []);
 }
 
 function groupsNewChild(parent) {
-    groupsUI.editing = { mode: 'create', name: '', parent, kind: 'other' };
+    groupsUI.editing = { mode: 'create', name: '', parent };
     groupsLoadEligible(parent, []);
 }
 
@@ -120,7 +120,7 @@ function groupsFind(name, nodes = groupsUI.tree) {
 function groupsEdit(name) {
     const group = groupsFind(name);
     if (!group) return;
-    groupsUI.editing = { mode: 'edit', name, parent: group.parent, kind: group.kind };
+    groupsUI.editing = { mode: 'edit', name, parent: group.parent };
     groupsLoadEligible(group.parent, group.columns);
 }
 
@@ -159,17 +159,6 @@ function renderGroupsEditor() {
         ? (editing.parent ? `New subgroup of '${escapeHtml(editing.parent)}'` : 'New group')
         : `Editing '${escapeHtml(editing.name)}'`;
 
-    // any group at any depth can be a scale — a container can hold several
-    const kindField = `
-        <select id="group-kind" style="width:100%;">
-            ${['scale', 'demographics', 'other'].map(kind => `
-                <option value="${kind}" ${editing.kind === kind ? 'selected' : ''}>
-                    ${kind === 'scale' ? 'Scale — its columns are scored together as this scale'
-                      : kind === 'demographics' ? 'Demographics — background variables'
-                      : 'Container — organise only, no scoring'}
-                </option>`).join('')}
-        </select>`;
-
     const scopeNote = editing.parent
         ? `Positions count within '${escapeHtml(editing.parent)}': <code>1:4</code> is the first four columns listed below.`
         : `Positions count within the table: <code>7:15</code> is the seventh to fifteenth column.`;
@@ -180,9 +169,6 @@ function renderGroupsEditor() {
         <label class="muted">Group name</label>
         <input type="text" id="group-name" value="${escapeHtml(editing.name)}"
                placeholder="e.g. Wellbeing, or Positive affect" style="width:100%; margin:4px 0 12px;">
-
-        <label class="muted">Kind</label>
-        <div style="margin:4px 0 12px;">${kindField}</div>
 
         <label class="muted">Type columns — names, ranges (<code>WB1:WB5</code>, <code>1:4</code>) or globs (<code>WB*</code>)</label>
         <div style="display:flex; gap:8px; margin:4px 0 4px;">
@@ -292,18 +278,16 @@ function groupsApplySpec() {
 function groupsSave() {
     const editing = groupsUI.editing;
     const name = document.getElementById('group-name').value.trim();
-    const kindSelect = document.getElementById('group-kind');
     const columns = Array.from(groupsUI.selected);
 
     if (!name) { logError('Give the group a name.'); return; }
 
     const request = editing.mode === 'create'
         ? apiPost('/api/groups/create', {
-            name, parent: editing.parent, kind: kindSelect ? kindSelect.value : undefined, columns
+            name, parent: editing.parent, columns
         })
         : apiPost('/api/groups/update', {
-            name: editing.name, new_name: name,
-            kind: kindSelect ? kindSelect.value : undefined, columns
+            name: editing.name, new_name: name, columns
         });
 
     request
@@ -326,7 +310,7 @@ function groupsSave() {
 /* The tree flattened for a dropdown, each entry carrying its depth. */
 function groupsFlat(nodes = groupsUI.tree, depth = 0, out = []) {
     nodes.forEach(node => {
-        out.push({ name: node.name, depth, kind: node.kind });
+        out.push({ name: node.name, depth, scale: node.scale });
         groupsFlat(node.children, depth + 1, out);
     });
     return out;
@@ -430,7 +414,10 @@ function groupsDelete(name) {
 
     apiPost('/api/groups/delete', { name })
         .then(data => {
-            log(`[INFO] Removed group(s): ${escapeHtml(data.removed.join(', '))}. Their columns are Uncategorised again.`, 'info');
+            log(`[INFO] Removed group(s): ${escapeHtml(data.removed.join(', '))}. Their columns are ungrouped again.`, 'info');
+            if (data.scales_removed && data.scales_removed.length) {
+                log(`[INFO] Scale(s) built on them also removed: ${escapeHtml(data.scales_removed.join(', '))}.`, 'info');
+            }
             if (groupsUI.editing && data.removed.includes(groupsUI.editing.name)) groupsUI.editing = null;
             return refreshGroups();
         })

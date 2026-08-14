@@ -1,5 +1,82 @@
 /* Fields & Scales menus: categorisation, scale definitions, numerise, scoring. */
 
+/* --- declaring scales on groups ---------------------------------------- */
+
+function openCreateScaleModal() {
+    withDataset(() => refreshScales().then(() => openModal('modal-create-scale')));
+}
+
+function refreshScales() {
+    return apiGet('/api/scales')
+        .then(data => {
+            renderScaleList(data.scales);
+            renderScaleForm(data.groups);
+        })
+        .catch(reportError);
+}
+
+function renderScaleList(scales) {
+    document.getElementById('scale-list').innerHTML = scales.length
+        ? scales.map(scale => `
+            <div class="form-row">
+                <div>
+                    <strong>${escapeHtml(scale.name)}</strong>
+                    <span class="muted" style="display:block;">
+                        from group '${escapeHtml(scale.group)}' — ${scale.column_count} column(s)
+                    </span>
+                </div>
+                <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;"
+                        data-name="${escapeHtml(scale.name)}"
+                        onclick="removeScale(this.dataset.name)">Delete</button>
+            </div>`).join('')
+        : '<div class="muted">No scales yet.</div>';
+}
+
+function renderScaleForm(groups) {
+    const free = groups.filter(group => !group.taken_by && group.column_count);
+    const select = document.getElementById('scale-group');
+
+    select.innerHTML = free.map(group => {
+        const indent = '&nbsp;'.repeat(group.depth * 4) + (group.depth ? '&#8627; ' : '');
+        return `<option value="${escapeHtml(group.name)}">
+                    ${indent}${escapeHtml(group.name)} (${group.column_count} col)
+                </option>`;
+    }).join('');
+
+    const note = document.getElementById('scale-form-note');
+    if (!groups.length) {
+        note.innerHTML = 'Build a group first in <strong>Fields &#8594; Groups</strong> — a scale reads its columns from one.';
+    } else if (!free.length) {
+        note.innerHTML = 'Every group with columns already has a scale. Add another group, or delete a scale below.';
+    } else {
+        note.textContent = 'The scale takes the group’s columns. Leave the name blank to reuse the group name.';
+    }
+    select.disabled = !free.length;
+}
+
+function submitCreateScale() {
+    const group = document.getElementById('scale-group').value;
+    const name = document.getElementById('scale-name').value.trim();
+    if (!group) { logError('Pick a group to build the scale on.'); return; }
+
+    apiPost('/api/create_scale', { group, name: name || null })
+        .then(data => {
+            log(`[SUCCESS] Scale '${escapeHtml(data.scale.name)}' declared on group '${escapeHtml(data.scale.group)}'.`, 'success');
+            document.getElementById('scale-name').value = '';
+            return refreshScales();
+        })
+        .catch(reportError);
+}
+
+function removeScale(name) {
+    apiPost('/api/delete_scale', { scale_name: name })
+        .then(() => {
+            log(`[INFO] Scale '${escapeHtml(name)}' removed. Its group and columns are untouched.`, 'info');
+            return refreshScales();
+        })
+        .catch(reportError);
+}
+
 /* --- numerise ---------------------------------------------------------- */
 
 function openNumeriseModal() {

@@ -1,14 +1,91 @@
-"""Numerisation and scoring.
+"""Scales: declaring them on a group, then numerising and scoring them.
 
-Scales themselves are not defined here: a scale is a group marked as one in
-Fields -> Groups (see :mod:`cpdm.core.groups`), which is where it takes both
-its name and its columns from. This module only acts on them.
+A scale is deliberately separate from the group tree. A group organises
+columns; a scale says "these columns, as organised by that group, are one
+instrument". Declaring a scale takes the group's name and its columns, and
+nothing about the group changes — the same tree can carry no scales at all,
+or a scale on every subgroup.
+
+Where a scale is declared on a group *and* on a group nested inside it, the
+deeper one wins for the columns they share (see ``Dataset.refresh_categories``).
 """
 
 import pandas as pd
 
+from cpdm.core import groups
+
 DIRECT = "Direct"
 REVERSE = "Reverse"
+
+
+# --- declaring scales -----------------------------------------------------
+def list_scales(dataset):
+    """Every declared scale, with the group it reads and that group's columns."""
+    listing = []
+    for scale in dataset.scales:
+        group = dataset.find_group(scale["group"])
+        columns = list(group["columns"]) if group else []
+        listing.append({
+            "name": scale["name"],
+            "group": scale["group"],
+            "columns": columns,
+            "column_count": len(columns),
+            "missing_group": group is None,
+        })
+    return listing
+
+
+def find_scale(dataset, name):
+    for scale in dataset.scales:
+        if scale["name"] == name:
+            return scale
+    return None
+
+
+def create_scale(dataset, group_name, name=None):
+    """Declare the columns of a group to be a scale."""
+    dataset.require_df()
+
+    group = groups.require(dataset, group_name)
+    if not group["columns"]:
+        raise ValueError(
+            f"Group '{group_name}' has no columns yet. Add columns in Fields -> Groups first."
+        )
+
+    existing = groups.scale_on(dataset, group_name)
+    if existing:
+        raise ValueError(f"Group '{group_name}' is already the scale '{existing}'.")
+
+    name = (name or group_name).strip()
+    if not name:
+        raise ValueError("Scale name cannot be empty.")
+    for scale in dataset.scales:
+        if scale["name"].lower() == name.lower():
+            raise ValueError(f"A scale named '{scale['name']}' already exists.")
+
+    scale = {"name": name, "group": group_name}
+    dataset.scales.append(scale)
+    dataset.refresh_categories()
+    return scale
+
+
+def delete_scale(dataset, name):
+    """Undeclare a scale. Its group and columns are untouched."""
+    if find_scale(dataset, name) is None:
+        raise ValueError(f"No scale named '{name}'.")
+    dataset.scales = [scale for scale in dataset.scales if scale["name"] != name]
+    dataset.refresh_categories()
+    return dataset.defined_scales
+
+
+def scale_summary(dataset):
+    """One line per scale, for the console."""
+    return [
+        f"[{scale['name']}] from group '{scale['group']}', "
+        f"{scale['column_count']} column(s): "
+        + (", ".join(scale["columns"]) if scale["columns"] else "none")
+        for scale in list_scales(dataset)
+    ]
 
 
 # --- numerisation --------------------------------------------------------

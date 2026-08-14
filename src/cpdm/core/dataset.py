@@ -8,22 +8,7 @@ first argument instead of holding state of their own.
 import pandas as pd
 
 UNCATEGORISED = "Uncategorised"
-DEMOGRAPHICS = "Demographics"
 SCALE_PREFIX = "Scale: "
-
-#: what a group represents. Any group at any depth can be a scale: a container
-#: group can hold several scales, and a scale can hold sub-scales. Plain
-#: containers organise columns without claiming them for scoring.
-KIND_SCALE = "scale"
-KIND_DEMOGRAPHICS = "demographics"
-KIND_OTHER = "other"
-KINDS = (KIND_SCALE, KIND_DEMOGRAPHICS, KIND_OTHER)
-
-KIND_LABELS = {
-    KIND_SCALE: "Scale",
-    KIND_DEMOGRAPHICS: "Demographics",
-    KIND_OTHER: "Container",
-}
 
 
 #: recipe schema version. v1 was the flat header_map / value_replacements /
@@ -43,7 +28,13 @@ def empty_cleaning_rules():
 
 
 class Dataset:
-    """The in-memory workbook plus its categorisation and cleaning recipe."""
+    """The in-memory workbook plus its groups, scales and cleaning recipe.
+
+    Groups and scales are separate things. ``groups`` is a tree of named column
+    sets and says nothing about analysis; ``scales`` names the groups whose
+    columns are to be scored together. ``categories`` is derived from the two
+    and is what Scoring, Numerise and Compute read.
+    """
 
     def __init__(self):
         self.reset()
@@ -54,6 +45,7 @@ class Dataset:
         self.filename = "dataset.xlsx"
         self.categories = {}
         self.groups = []
+        self.scales = []
         self.scoring_config = {}
         self.cleaning_rules = empty_cleaning_rules()
 
@@ -64,6 +56,7 @@ class Dataset:
         self.filename = filename or "dataset.xlsx"
         self.categories = {col: UNCATEGORISED for col in df.columns}
         self.groups = []
+        self.scales = []
         self.scoring_config = {}
         self.cleaning_rules = empty_cleaning_rules()
         return {"filename": self.filename, "rows": len(df), "cols": list(df.columns)}
@@ -80,8 +73,52 @@ class Dataset:
 
     @property
     def defined_scales(self):
-        """Every group marked as a scale, at any depth in the tree."""
-        return [group["name"] for group in self.groups if group["kind"] == KIND_SCALE]
+        return [scale["name"] for scale in self.scales]
+
+    # --- the group tree ---------------------------------------------------
+    def find_group(self, name):
+        for group in self.groups:
+            if group["name"] == name:
+                return group
+        return None
+
+    def group_depth(self, group):
+        """How far below a root a group sits (0 for a root)."""
+        steps = 0
+        seen = {group["name"]}
+        while group["parent"]:
+            group = self.find_group(group["parent"])
+            if group is None or group["name"] in seen:
+                break
+            seen.add(group["name"])
+            steps += 1
+        return steps
+
+    def refresh_categories(self):
+        """Recompute ``categories`` from the groups and the scales on them.
+
+        A column takes the scale of the **deepest** group holding it that has
+        one, so a scale defined on a subgroup wins over one on the group above.
+        """
+        if self.df is None:
+            return self.categories
+
+        categories = {col: UNCATEGORISED for col in self.df.columns}
+
+        def depth(scale):
+            group = self.find_group(scale["group"])
+            return self.group_depth(group) if group else -1
+
+        for scale in sorted(self.scales, key=depth):  # shallow first
+            group = self.find_group(scale["group"])
+            if group is None:
+                continue
+            for col in group["columns"]:
+                if col in categories:
+                    categories[col] = SCALE_PREFIX + scale["name"]
+
+        self.categories = categories
+        return categories
 
     def active_columns(self, extra_ignored=None):
         """Columns that bulk cleaning is allowed to touch."""
@@ -122,6 +159,7 @@ class Dataset:
         for group in self.groups:
             renamed = [(rename_map or {}).get(col, col) for col in group["columns"]]
             group["columns"] = [col for col in renamed if col in live]
+        self.refresh_categories()
         return self.groups
 
     # --- recipe ----------------------------------------------------------
@@ -155,6 +193,7 @@ class Dataset:
             ),
             "categories": self.categories,
             "groups": self.groups,
+            "scales": self.scales,
             "defined_scales": self.defined_scales,
             "ignored_columns": list(self.cleaning_rules.get("ignored_columns", [])),
             "has_cleaning_rules": self.has_cleaning_rules(),

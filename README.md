@@ -90,16 +90,10 @@ Version 1 recipes — the older flat format, including `samples/sample_cleaning_
 
 ### Fields
 
-**Groups** — one dialogue, two tabs, for saying what every column *is*, and the only
-place scales are defined. A **group** names a set of columns; a **subgroup** holds a
-subset of its parent's columns, at any depth of nesting.
-
-Groups and scales are separate ideas. Each group carries a *kind* — `Scale`,
-`Demographics`, or `Container` (organise only, claims nothing for scoring) — and any
-group at any depth can be a scale, so a container called `Scales` can hold `PHQ` and
-`GAD` as two independent scales. Where marks nest, the deepest one wins: mark a scale's
-subgroups as containers and it scores as one scale; mark them as scales and each becomes
-its own. A scale takes both its name and its items from the group.
+**Groups** — one dialogue, two tabs, for organising columns. A **group** names a set of
+columns; a **subgroup** holds a subset of its parent's columns, at any depth of nesting.
+Grouping says nothing about analysis: whether a group's columns are a scale is declared
+separately under Scales → Create Scale, so the two can be edited independently.
 
 *Build groups* creates and edits groups: pick columns by ticking them, or type a spec —
 names (`WB1, DS2`), inclusive ranges by name or position (`WB1:WB5`, `8:16`), single
@@ -114,14 +108,22 @@ didn't, and anything outside the parent group.
 the whole tree, a search box, an *only ungrouped* filter, and a running count of how many
 columns are still unfiled. Choosing a subgroup files the column under its parent too.
 
-The tree is the single source of truth; the flat categorisation the rest of the app reads
-is derived from it. A column belongs to one group per level (reassigning moves it and
-says so), shrinking a group trims its subgroups, and renames from Numerise are followed
-automatically. `groups` at the prompt prints the tree.
+A column belongs to one group per level (reassigning moves it and says so), shrinking a
+group trims its subgroups, and renames from Numerise are followed automatically. Deleting
+a group removes its subgroups and any scale declared on them. `groups` at the prompt
+prints the tree, with the scale each group backs.
 
 ### Scales
 
-Scales are created in Fields → Groups; this menu holds what you then do with them.
+**Create Scale** — declares that a group's columns are one instrument. Pick the group; the
+scale takes its columns, and its name unless you give a different one (group `PHQ` can
+back scale `PHQ-9`). A group at any depth can carry a scale, so a container holding `PHQ`
+and `GAD` yields two scales rather than one; where scales sit on nested groups the deepest
+wins the columns they share. Deleting a scale leaves its group and columns untouched. The
+same dialogue lists what is declared, and `scales` at the prompt prints it.
+
+Together, groups and scales give every column its category — `Scale: <name>` for the
+deepest scale holding it, `Uncategorised` otherwise — which is what the tools below read.
 
 **Numerise** — bulk-renames the columns of one scale group (or of all of them) to
 `Scale_1`, `Scale_2`, … with a configurable prefix, following column order.
@@ -155,7 +157,8 @@ command `docs` prints links to all of them.
 | `info` | Filename, dimensions, demographics, ignored-column count, scales and their members |
 | `summary` | `describe()` descriptive statistics |
 | `columns` | Column count and full list of names |
-| `groups` | The field group / subgroup tree |
+| `groups` | The field group / subgroup tree, and the scale each group backs |
+| `scales` | The declared scales and the groups they read |
 | `docs` | Links to every documentation page |
 | `replace "old" "new"` | Global literal replacement across active text columns (quoted, Unicode-safe) |
 | `clear` | Clears the output pane |
@@ -228,9 +231,9 @@ src/cpdm/
         text_rules.py        Trimming rules: the chain model and its modes
         cleaning.py          Header mapping, value replacement, trimming
         recipes.py           Saving and replaying cleaning recipes
-        groups.py            The field group tree and the categories it derives
+        groups.py            The field group tree
         column_spec.py       Typed column selections: names, ranges, globs
-        scales.py            Scale definitions, categories, numerise, scoring
+        scales.py            Scales declared on groups, numerise, scoring
         compute.py           Row-wise statistics
         console.py           Command prompt handlers
         docs_library.py      Discovery of docs/*.md
@@ -270,6 +273,8 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `GET` | `/api/export_cleaning_rules` | Download `cleaning_rules.json` |
 | `POST` | `/api/apply_cleaning_rules_file` | Replay a saved recipe |
 | `GET` | `/api/groups` | The group tree, per-column assignments, ungrouped list |
+| `GET` | `/api/scales` | Declared scales, and the groups one could be built on |
+| `POST` | `/api/create_scale`, `/api/delete_scale` | Declare or drop a scale on a group |
 | `POST` | `/api/groups/create`, `/api/groups/update`, `/api/groups/delete` | Edit the tree |
 | `POST` | `/api/groups/assign` | Set each column's group directly |
 | `POST` | `/api/groups/eligible` | Columns a group or subgroup may take |
@@ -286,15 +291,15 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Twenty-six end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Twenty-seven end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
 tidying, collision warnings, and the guarantee that a preview leaves the dataset
 untouched), and field groups (the containment rule, column moves, subgroup trimming,
 per-column assignment including the parent implication, parent-relative positions in a
-spec, a subgroup acting as its own scale, survival through renames and deletion, and the
-spec parser).
+spec, scales declared on nested groups with the deepest winning, the rules that refuse a
+bad declaration, survival through renames and deletion, and the spec parser).
 
 ---
 

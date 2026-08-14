@@ -41,6 +41,7 @@
         <div class="nav-item">
             <button class="nav-btn">Scales</button>
             <div class="dropdown">
+                <div class="dropdown-item" onclick="openCreateScaleModal()">Create Scale</div>
                 <div class="dropdown-item" onclick="openNumeriseModal()">Numerise</div>
                 <div class="dropdown-item" onclick="openScoringModal()">Scoring</div>
             </div>
@@ -138,6 +139,37 @@
             <div class="modal-footer">
                 <span id="groups-assign-status" class="muted" style="margin-right:auto;"></span>
                 <button class="btn btn-secondary" onclick="closeModal('modal-groups')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Scale: declares a group's columns to be a scale -->
+    <div id="modal-create-scale" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Scales &#8594; Create Scale</div>
+            <div class="modal-body">
+                <div class="hint-box">
+                    <strong>A scale reads a group</strong>
+                    <span>Groups organise columns; a scale says a group's columns are one
+                    instrument. Both stay editable on their own — deleting a scale leaves
+                    its group alone.</span>
+                </div>
+
+                <label class="muted">Group</label>
+                <select id="scale-group" style="width:100%; margin:4px 0 10px;"></select>
+
+                <label class="muted">Scale name (optional)</label>
+                <div style="display:flex; gap:10px; margin:4px 0 6px;">
+                    <input type="text" id="scale-name" placeholder="defaults to the group name" style="flex:1;">
+                    <button class="btn btn-primary" onclick="submitCreateScale()">Create</button>
+                </div>
+                <div id="scale-form-note" class="muted" style="margin-bottom:16px;"></div>
+
+                <label style="font-weight:bold; display:block; margin-bottom:8px;">Declared scales</label>
+                <div id="scale-list" class="scroll-box"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-create-scale')">Close</button>
             </div>
         </div>
     </div>

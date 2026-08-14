@@ -1,6 +1,8 @@
 # Field Groups and Subgroups
 
-**Fields → Groups** is where you say what your columns *are*, and the only place scales are defined. A **group** names a set of columns — Demographics, Wellbeing, or a container holding several instruments. A **subgroup** takes a subset of the group above it: a subscale, or one instrument inside a block of them.
+**Fields → Groups** is where you organise columns. A **group** names a set of them — the demographics, the item block, one instrument. A **subgroup** takes a subset of the group above it: a subscale, or one instrument inside a block of them.
+
+Grouping says nothing about analysis. Declaring that a group's columns form a scale is a separate step, under [Scales → Create Scale](/docs/help/scales-and-scoring) — so the two stay independent, and you can reorganise columns without disturbing your scales, or drop a scale without disturbing your groups.
 
 The rule that shapes everything here: a subgroup can only hold columns its parent already holds. Nesting can go deeper than two levels, and the rule applies at each one, so every subgroup's columns belong to its root group.
 
@@ -16,24 +18,15 @@ The dialogue has two tabs, and they edit the same thing from opposite ends:
 | Field | What it does |
 | --- | --- |
 | Group name | Must be unique across the whole tree, subgroups included. |
-| Kind | *Scale*, *Demographics*, or *Container* — see below. Any group can be any kind, at any depth. |
 | Columns | Tick them in the list, or type them — see below. |
 
 **Create group** saves it. The **+ Sub** button on any group opens the same editor for a child, with the column list already narrowed to that group's columns.
 
 ## Groups are not scales
 
-A group is organisational. A **scale** is a group whose kind says it is one — and that mark can sit at any level:
+A group is a container of columns and nothing more. Nothing you do here decides what gets scored — that is what **Scales → Create Scale** is for, and it points at a group. A group with a scale on it wears a green `scale:` badge in the tree.
 
-| Kind | Meaning |
-| --- | --- |
-| **Scale** | This group's columns are one scale, taking its name. Scoring, Numerise and Compute address it. |
-| **Demographics** | Background variables. |
-| **Container** | Organise only. The group claims nothing for scoring; it just holds things. |
-
-So a container called `Scales` can hold `PHQ` and `GAD` as two separate scales, and a scale can hold containers that merely label facets of it. New root groups default to *Scale*, new subgroups to *Container*, which keeps a subscale inside its parent scale until you say otherwise.
-
-Where a column sits inside nested marked groups, **the deepest mark wins**. Mark `Wellbeing` as the scale and its subgroups as containers, and everything scores as one Wellbeing scale; mark the subgroups as scales instead and each becomes a scale of its own.
+Because the two are separate, a group called `Scales` holding the whole item block can carry no scale itself while its subgroups `PHQ` and `GAD` each carry one. Where scales are declared on nested groups, the deepest declaration wins for the columns they share.
 
 ## Typing columns instead of ticking them
 
@@ -61,9 +54,9 @@ Create the groups under **Build groups** first; the dropdown can only offer grou
 
 ## What groups drive
 
-The group tree is the only place column membership is decided, and scales are created here rather than anywhere else — a scale takes both its name and its columns from the group marked as one. Everything downstream reads a flat picture derived from the tree: each column counts as `Scale: <name>` of the deepest scale group holding it, which is what Scoring, Numerise and Compute work from.
+The tree is the only place column membership is decided. Which of those groups are scales is decided in Scales → Create Scale, and the two together give every column its category: `Scale: <name>` for the deepest scale holding it, `Uncategorised` for everything else. That is what Scoring, Numerise and Compute read.
 
-Deleting a group removes it and everything beneath it. It never touches the data — the columns simply become ungrouped.
+Deleting a group removes it, everything beneath it, and any scale declared on them — the log says which. It never touches the data: the columns simply become ungrouped.
 
 ## Two rules the editor enforces for you
 
@@ -73,27 +66,27 @@ Deleting a group removes it and everything beneath it. It never touches the data
 
 ## Checking the tree
 
-Type `groups` at the prompt:
+Type `groups` at the prompt (and `scales` for the other half):
 
 ```
 Field Groups:
-[Background] Demographics, 4 column(s): Age, Gender, District, Occupation
-[Scales] Container, 9 column(s): WB1, WB2, WB3, WB4, WB5, DS1, DS2, DS3, DS4
-  - [PHQ] Scale, 4 column(s): WB1, WB2, WB3, WB4
-  - [GAD] Scale, 4 column(s): DS1, DS2, DS3, DS4
+[Background] group, 4 column(s): Age, Gender, District, Occupation
+[Scales] group, 9 column(s): WB1, WB2, WB3, WB4, WB5, DS1, DS2, DS3, DS4
+  - [PHQ] scale 'PHQ-9', 4 column(s): WB1, WB2, WB3, WB4
+  - [GAD] scale 'GAD-7', 4 column(s): DS1, DS2, DS3, DS4
 ```
 
 ## A worked pass over the sample survey
 
 After cleaning `sample_survey.xlsx` (see [Sample Data](/docs/help/sample-data)):
 
-1. **+ New group** → `Background`, kind *Demographics*, spec `3:6` (age, gender, district, occupation).
-2. **+ New group** → `Scales`, kind *Container*, spec `8:16` — the nine item columns.
-3. **+ Sub** on Scales → `Wellbeing`, kind *Scale*, spec `1:5`. Inside `Scales`, `1:5` is its own first five columns, `WB1`–`WB5`.
-4. **+ Sub** on Scales → `Digital Stress`, kind *Scale*, spec `6:9` — `DS1`–`DS4`.
-5. **+ Sub** on Wellbeing → `Negative affect`, kind *Container*, spec `3, 5` — the two reverse-keyed items, labelled without splitting the scale.
-6. **+ New group** → `Admin`, kind *Container*, spec `Timestamp, Name, Comments`, so those columns are filed away but stay out of scoring.
+1. **+ New group** → `Background`, spec `3:6` (age, gender, district, occupation).
+2. **+ New group** → `Scales`, spec `8:16` — the nine item columns.
+3. **+ Sub** on Scales → `Wellbeing`, spec `1:5`. Inside `Scales`, `1:5` is its own first five columns, `WB1`–`WB5`.
+4. **+ Sub** on Scales → `Digital Stress`, spec `6:9` — `DS1`–`DS4`.
+5. **+ Sub** on Wellbeing → `Negative affect`, spec `3, 5` — the two reverse-keyed items, labelled without splitting anything.
+6. **+ New group** → `Admin`, spec `Timestamp, Name, Comments`.
 
-That gives two scales, `Wellbeing` and `Digital Stress`, each addressable on its own in Scoring and Numerise, with the container above them keeping the item block together.
+Then, under **Scales → Create Scale**, declare a scale on `Wellbeing` and another on `Digital Stress`. The other groups stay as they are: organised, and out of the scoring tools.
 
-From here, [Scales and Scoring](/docs/help/scales-and-scoring) and [Computing Scores](/docs/help/compute-and-export) work exactly as before — and a subscale mean is just a Compute run over the columns of one subgroup.
+From there, [Scales and Scoring](/docs/help/scales-and-scoring) and [Computing Scores](/docs/help/compute-and-export) take over — and a subscale mean is just a Compute run over the columns of one subgroup, whether or not that subgroup carries a scale of its own.

@@ -6,13 +6,14 @@ Each handler returns a dict the browser understands: ``output`` for plain text,
 
 import shlex
 
-from cpdm.core import cleaning, docs_library, groups
-from cpdm.core.dataset import DEMOGRAPHICS, SCALE_PREFIX
+from cpdm.core import cleaning, docs_library, groups, scales
+from cpdm.core.dataset import SCALE_PREFIX
 
 HELP_TEXT = """Available Commands:
  - show/head                   : Displays the first 5 rows
  - info                        : Shows dataset shape, scales & categories
  - groups                      : Shows the field group / subgroup tree
+ - scales                      : Shows the scales and the groups they read
  - summary                     : Descriptive statistics
  - columns                     : Lists all columns
  - docs                        : Lists the Theory & Help documentation pages
@@ -53,19 +54,19 @@ def _cmd_columns(dataset, _args):
 
 
 def _cmd_info(dataset, _args):
-    demographics = dataset.columns_by_category(DEMOGRAPHICS)
-
     grouped = {}
     for col, category in dataset.categories.items():
         if category.startswith(SCALE_PREFIX.strip()):
             grouped.setdefault(category.replace(SCALE_PREFIX, ""), []).append(col)
 
+    ungrouped = groups.ungrouped_columns(dataset)
     lines = [
         f"Dataset File: {dataset.filename}",
         f"Dimensions  : {dataset.df.shape[0]} rows x {dataset.df.shape[1]} columns",
-        f"Demographics: {', '.join(demographics) if demographics else 'None'}",
         f"Ignored Cols: {len(dataset.ignored_columns)}",
-        f"Defined Scales ({len(dataset.defined_scales)}): {', '.join(dataset.defined_scales)}",
+        f"Groups      : {len(dataset.groups)} ({len(ungrouped)} column(s) ungrouped)",
+        f"Scales ({len(dataset.defined_scales)}): "
+        + (", ".join(dataset.defined_scales) if dataset.defined_scales else "none"),
     ]
     for scale_name, cols in grouped.items():
         lines.append(f"  - [{scale_name}]: {', '.join(cols)}")
@@ -77,6 +78,13 @@ def _cmd_groups(dataset, _args):
     if not lines:
         return {"output": "No field groups yet. Build them in Fields -> Groups.\n"}
     return {"output": "Field Groups:\n" + "\n".join(lines) + "\n"}
+
+
+def _cmd_scales(dataset, _args):
+    lines = scales.scale_summary(dataset)
+    if not lines:
+        return {"output": "No scales yet. Declare one in Scales -> Create Scale.\n"}
+    return {"output": "Scales:\n" + "\n".join(lines) + "\n"}
 
 
 def _cmd_summary(dataset, _args):
@@ -104,6 +112,7 @@ COMMANDS = {
     "columns": (_cmd_columns, True),
     "info": (_cmd_info, True),
     "groups": (_cmd_groups, True),
+    "scales": (_cmd_scales, True),
     "summary": (_cmd_summary, True),
     "replace": (_cmd_replace, True),
 }

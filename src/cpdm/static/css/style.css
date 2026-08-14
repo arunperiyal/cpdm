@@ -160,8 +160,7 @@ select, input[type="text"], input[type="number"] { background: #11111b; border: 
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
     color: #a6adc8; border: 1px solid #313244; border-radius: 3px; padding: 1px 5px;
 }
-.group-badge.kind-scale { color: #a6e3a1; border-color: #a6e3a1; }
-.group-badge.kind-demographics { color: #f9e2af; border-color: #f9e2af; }
+.group-badge.is-scale { color: #a6e3a1; border-color: #a6e3a1; text-transform: none; }
 
 .col-index {
     flex: 0 0 auto; min-width: 20px; text-align: right; font-family: monospace;

@@ -17,7 +17,6 @@ def list_groups():
 
     return jsonify({
         "groups": groups.tree(session),
-        "kinds": [{"value": kind, "label": groups.KIND_LABELS[kind]} for kind in groups.KINDS],
         "cols": columns,
         "assignments": {col: groups.group_of(session, col) for col in columns},
         "ungrouped": groups.ungrouped_columns(session) if has_file else [],
@@ -62,9 +61,6 @@ def create():
         state.session,
         body.get("name"),
         parent=body.get("parent"),
-        # absent means "let the model decide": scale for a root, container
-        # for a subgroup
-        kind=body.get("kind"),
         columns=body.get("columns"),
         spec=body.get("spec"),
     )
@@ -79,7 +75,6 @@ def update():
         state.session,
         body.get("name"),
         new_name=body.get("new_name"),
-        kind=body.get("kind"),
         columns=body.get("columns"),
         spec=body.get("spec"),
     )
@@ -94,4 +89,5 @@ def update():
 @api_route(bp, "/groups/delete", methods=["POST"])
 def delete():
     removed = groups.delete_group(state.session, payload().get("name"))
-    return ok(removed=removed, groups=groups.tree(state.session))
+    return ok(removed=removed["groups"], scales_removed=removed["scales"],
+              groups=groups.tree(state.session))

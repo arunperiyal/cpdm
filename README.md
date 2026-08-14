@@ -125,12 +125,27 @@ same dialogue lists what is declared, and `scales` at the prompt prints it.
 Together, groups and scales give every column its category — `Scale: <name>` for the
 deepest scale holding it, `Uncategorised` otherwise — which is what the tools below read.
 
+A scale describes itself in two parts, both taken from its group and shown as soon as you
+pick one: **Items** are its columns — the questions — and **Options** are its response
+set, seeded from the values actually in the data. Answers that are already numbers arrive
+in numeric order, scored as themselves.
+
+**Assign Scoring** — the ordered option list, each with a score. Reorder with ↑ ↓ into
+response order, then *Number 1…n* (or *n…1*) fills the scores in. Add an option nobody
+happened to choose, re-scan for answers that appeared after further cleaning, or remove
+one. Leaving a score **blank** marks that answer as missing by design — *Not applicable*
+— and keeps it out of the scale's range.
+
+**Assign Scoring Type** — *Direct* or *Reverse* per item, with all-direct / all-reverse
+buttons. There is no maximum to type: reverse items use `min + max − value` from the
+scale's own option scores, so a 1–7 scale reverses as `8 − value` without being told.
+
+**Apply Scoring to Data** — previews per item how many cells will be scored, how many are
+blank, and any answer the option list does not cover (which would become blank), then
+writes the scores **within that scale's columns only** and flips the reverse items.
+
 **Numerise** — bulk-renames the columns of one scale group (or of all of them) to
 `Scale_1`, `Scale_2`, … with a configurable prefix, following column order.
-
-**Scoring** — per scale column, choose *Direct* or *Reverse* and a maximum score. The
-column is coerced to numeric (unparseable cells become blank) and reverse items become
-`(1 + max) − value`.
 
 ### Compute
 
@@ -204,8 +219,8 @@ Regenerate them with `python samples/generate_samples.py` (synthetic, fixed seed
 - **Single session, in-memory.** One dataset is held in a module-level object shared by
   all requests; there is no multi-user isolation, no persistence, and no undo. Restarting
   the server discards the working data. Export before you quit.
-- **Cleaning recipes record text rules, renames and replacements** — scoring, numerise and
-  computed columns are still not part of the exported `.json`.
+- **Cleaning recipes record text rules, renames and replacements** — groups, scales,
+  scoring, numerise and computed columns are not part of the exported `.json`.
 - **Text replacement is substring-based**, not whole-cell: mapping `Yes` → `1` also
   rewrites `Yes, always`. Use the ignore and exempt lists to protect free text.
 - Not yet implemented from the original project outline: **form creation**, **data
@@ -280,7 +295,11 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `POST` | `/api/groups/eligible` | Columns a group or subgroup may take |
 | `POST` | `/api/groups/resolve_spec` | Resolve a typed column spec |
 | `POST` | `/api/numerise` | Rename scale columns with a prefix |
-| `POST` | `/api/scoring` | Direct/reverse scoring |
+| `GET` | `/api/scales/<name>` | One scale's items and options |
+| `POST` | `/api/scales/inspect_group` | Items and options a scale on a group would get |
+| `POST` | `/api/scales/options`, `/api/scales/options/refresh`, `/api/scales/options/autoscore` | Edit the option list |
+| `POST` | `/api/scales/items` | Direct/reverse per item |
+| `POST` | `/api/scales/score/preview`, `/api/scales/score` | Preview and apply scoring |
 | `POST` | `/api/compute` | Row-wise statistic into a new column |
 | `POST` | `/api/command` | Console commands |
 | `GET` | `/api/docs`, `/api/docs/<section>/<slug>` | Doc listing and rendered page |
@@ -291,7 +310,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Twenty-seven end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Thirty-two end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
@@ -299,7 +318,10 @@ tidying, collision warnings, and the guarantee that a preview leaves the dataset
 untouched), and field groups (the containment rule, column moves, subgroup trimming,
 per-column assignment including the parent implication, parent-relative positions in a
 spec, scales declared on nested groups with the deepest winning, the rules that refuse a
-bad declaration, survival through renames and deletion, and the spec parser).
+bad declaration, survival through renames and deletion, and the spec parser), and scale
+scoring (option seeding and ordering, hand-added and deliberately unscored options,
+per-item direct/reverse, the no-mutation preview, unrecognised answers being reported
+rather than dropped, and blanks surviving value replacement).
 
 ---
 

@@ -35,11 +35,11 @@ On the usual 1–5 scale that is `6 − x`:
 | 4 | 2 |
 | 5 | 1 |
 
-On a 1–7 scale it is `8 − x`. CPDM's Scoring dialogue asks for the maximum and assumes a minimum of 1.
+On a 1–7 scale it is `8 − x`. CPDM takes both ends from the scale's own option scores, so there is no maximum to supply.
 
 ## The two ways to get it wrong
 
-**The wrong maximum.** Entering 5 for a 1–7 item turns a response of 6 into 0 and a 7 into −1. Nothing errors; the score column just quietly stops meaning anything. After scoring, run `summary` at the prompt and check that every item's minimum and maximum still sit inside the response range.
+**The wrong maximum.** Entering 5 for a 1–7 item turns a response of 6 into 0 and a 7 into −1. Nothing errors; the score column just quietly stops meaning anything. CPDM avoids this by deriving the range from the options you scored — but that only helps if the option list is complete, so add the answers nobody happened to choose. After scoring, run `summary` at the prompt and check that every item's minimum and maximum still sit inside the response range.
 
 **Scoring twice.** The transformation is its own inverse: apply it again and you are back where you started. If you are unsure whether scoring has been applied, look at the data rather than guessing — a reverse item's relationship with the rest of the scale should be positive once it is flipped.
 

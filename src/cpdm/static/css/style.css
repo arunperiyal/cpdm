@@ -168,6 +168,30 @@ select, input[type="text"], input[type="number"] { background: #11111b; border: 
 }
 .col-pick-name { flex: 1; word-break: break-word; }
 .col-table-pos { font-size: 10px; color: #6c7086; font-family: monospace; }
+
+/* SCALES: items, options and scoring */
+.scale-preview {
+    display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 12px;
+    border: 1px solid #313244; background: #181825; border-radius: 6px; padding: 10px;
+}
+.scale-preview > div { flex: 1; min-width: 200px; }
+.chip-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; max-height: 110px; overflow-y: auto; }
+.chip {
+    font-size: 11px; background: #11111b; border: 1px solid #313244;
+    border-radius: 10px; padding: 2px 8px; color: #cdd6f4;
+}
+
+.option-head, .option-row {
+    display: grid; grid-template-columns: 70px 1fr 90px 32px;
+    gap: 8px; align-items: center;
+}
+.option-head {
+    font-size: 11px; color: #89b4fa; font-weight: bold; padding-bottom: 6px;
+    border-bottom: 1px solid #313244; margin-bottom: 8px;
+}
+.option-row { padding: 4px 0; border-bottom: 1px solid #232334; }
+.option-row .option-label, .option-row .option-score { width: 100%; font-size: 12px; }
+.option-row .rule-actions .btn { padding: 2px 6px; font-size: 11px; }
 .group-node-actions { display: flex; gap: 4px; flex: 0 0 auto; }
 .group-node-actions .btn { padding: 2px 8px; font-size: 11px; }
 #groups-editor label { display: block; }

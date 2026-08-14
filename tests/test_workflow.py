@@ -71,11 +71,13 @@ def test_full_survey_workflow():
     assert state.session.categories["WB1"] == "Scale: Wellbeing"
     assert state.session.categories["Age"] == "Uncategorised"
 
-    client.post(
-        "/api/scoring",
-        json={"configs": {"WB3": {"type": "Reverse", "scale_max": 5},
-                          "WB5": {"type": "Reverse", "scale_max": 5}}},
-    )
+    # the scale seeded its options from the data, already coded 1-5
+    detail = client.get("/api/scales/Wellbeing").get_json()
+    assert [option["score"] for option in detail["options"]] == [1, 2, 3, 4, 5]
+
+    client.post("/api/scales/items",
+                json={"name": "Wellbeing", "items": {"WB3": "Reverse", "WB5": "Reverse"}})
+    client.post("/api/scales/score", json={})
     assert pd.api.types.is_numeric_dtype(state.session.df["WB3"])
 
     computed = client.post(
@@ -593,6 +595,166 @@ def test_scales_are_declared_on_groups_and_can_be_nested():
     assert len(groups.find(state.session, "PHQ")["columns"]) == 5
 
 
+def test_scale_items_options_and_scoring():
+    """The full describe -> order -> score -> type -> apply path, on text answers."""
+    client = fresh_client()
+    upload(client, "sample_survey.xlsx")
+
+    # trim the bilingual tails but leave the Likert answers as text
+    client.post("/api/text_rules/apply", json={
+        "stage": "headers",
+        "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                  {"mode": "tidy"}]})
+    client.post("/api/text_rules/apply", json={
+        "stage": "values",
+        "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                  {"mode": "tidy"}]})
+    client.post("/api/clean_headers", json={"header_map": {
+        "1. I feel calm and relaxed most days": "WB1",
+        "2. I sleep well at night": "WB2",
+        "3. I often feel tense for no clear reason": "WB3",
+    }})
+    client.post("/api/groups/create", json={"name": "WB", "columns": ["WB1", "WB2", "WB3"]})
+
+    # what the group would give a scale, before creating it
+    inspected = client.post("/api/scales/inspect_group", json={"group": "WB"}).get_json()
+    assert inspected["items"] == ["WB1", "WB2", "WB3"]
+    assert set(inspected["options"]) == {
+        "Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"}
+
+    client.post("/api/create_scale", json={"group": "WB", "name": "Wellbeing"})
+    detail = client.get("/api/scales/Wellbeing").get_json()
+    assert [item["type"] for item in detail["items"]] == ["Direct"] * 3
+    # text answers cannot be scored automatically
+    assert all(option["score"] is None for option in detail["options"])
+
+    # put the options in response order, adding one nobody chose
+    ordered = ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"]
+    client.post("/api/scales/options", json={
+        "name": "Wellbeing",
+        "options": [{"label": label} for label in ordered] + [{"label": "Not applicable"}]})
+    client.post("/api/scales/options/autoscore", json={"name": "Wellbeing"})
+
+    # the added option must not stretch the scale's range
+    client.post("/api/scales/options", json={
+        "name": "Wellbeing",
+        "options": [{"label": label, "score": index + 1} for index, label in enumerate(ordered)]
+                   + [{"label": "Not applicable", "score": None}]})
+    detail = client.get("/api/scales/Wellbeing").get_json()
+    assert (detail["score_min"], detail["score_max"]) == (1, 5)
+    assert detail["unscored"] == ["Not applicable"]
+
+    client.post("/api/scales/items", json={"name": "Wellbeing", "items": {"WB3": "Reverse"}})
+
+    # preview first: it must not touch the data
+    before = list(state.session.df["WB1"])
+    plans = client.post("/api/scales/score/preview", json={}).get_json()["plans"]
+    assert list(state.session.df["WB1"]) == before
+    plan = plans[0]
+    assert plan["reversal_note"] == "reverse = 6 - value"
+    assert {item["column"]: item["type"] for item in plan["items"]} == {
+        "WB1": "Direct", "WB2": "Direct", "WB3": "Reverse"}
+    assert all(item["unmapped"] == [] for item in plan["items"])
+
+    applied = client.post("/api/scales/score", json={}).get_json()["applied"][0]
+    assert applied["scale"] == "Wellbeing" and applied["cells_scored"] > 0
+
+    for column in ["WB1", "WB2", "WB3"]:
+        assert pd.api.types.is_numeric_dtype(state.session.df[column])
+        assert state.session.df[column].dropna().between(1, 5).all()
+
+    # columns outside the scale keep their text
+    assert state.session.df["Gender"].astype(str).str.contains("Male|Female").any()
+
+
+def test_unrecognised_answers_are_reported_not_silently_dropped():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "WB", "spec": "WB1:WB5"})
+    client.post("/api/create_scale", json={"group": "WB", "name": "Wellbeing"})
+
+    # drop an option the data actually uses
+    detail = client.get("/api/scales/Wellbeing").get_json()
+    kept = [o for o in detail["options"] if o["label"] != "5"]
+    client.post("/api/scales/options", json={"name": "Wellbeing", "options": kept})
+
+    plan = client.post("/api/scales/score/preview", json={}).get_json()["plans"][0]
+    assert any("5" in item["unmapped"] for item in plan["items"])
+
+    # an option left on the list without a score is missing by design, not an error
+    blanked = [{"label": o["label"], "score": (None if o["label"] == "4" else o["score"])}
+               for o in kept]
+    client.post("/api/scales/options", json={"name": "Wellbeing", "options": blanked})
+    plan = client.post("/api/scales/score/preview", json={}).get_json()["plans"][0]
+    assert all("4" not in item["unmapped"] for item in plan["items"])
+
+    refreshed = client.post("/api/scales/options/refresh", json={"name": "Wellbeing"}).get_json()
+    assert refreshed["added"] == ["5"]
+
+
+def test_scoring_needs_scored_options():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "WB", "spec": "WB1:WB5"})
+    client.post("/api/create_scale", json={"group": "WB", "name": "Wellbeing"})
+    client.post("/api/scales/options", json={
+        "name": "Wellbeing",
+        "options": [{"label": str(n), "score": None} for n in range(1, 6)]})
+
+    refused = client.post("/api/scales/score", json={})
+    assert refused.status_code == 400
+    assert "no scored options" in refused.get_json()["error"]
+
+    duplicate = client.post("/api/scales/options", json={
+        "name": "Wellbeing", "options": [{"label": "Yes"}, {"label": "yes"}]})
+    assert duplicate.status_code == 400 and "Duplicate" in duplicate.get_json()["error"]
+
+    bad_type = client.post("/api/scales/items",
+                           json={"name": "Wellbeing", "items": {"WB1": "Sideways"}})
+    assert bad_type.status_code == 400
+
+    not_an_item = client.post("/api/scales/items",
+                              json={"name": "Wellbeing", "items": {"Age": "Reverse"}})
+    assert not_an_item.status_code == 400 and "not an item" in not_an_item.get_json()["error"]
+
+
+def test_item_types_follow_a_rename():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "WB", "spec": "WB1:WB5"})
+    client.post("/api/create_scale", json={"group": "WB", "name": "Wellbeing"})
+    client.post("/api/scales/items", json={"name": "Wellbeing", "items": {"WB3": "Reverse"}})
+
+    client.post("/api/numerise", json={"prefix": "W", "target_scale": "Wellbeing"})
+    detail = client.get("/api/scales/Wellbeing").get_json()
+    assert [item["column"] for item in detail["items"]] == ["W1", "W2", "W3", "W4", "W5"]
+    assert [item["type"] for item in detail["items"]] == [
+        "Direct", "Direct", "Reverse", "Direct", "Direct"]
+
+
+def test_value_replacement_keeps_blanks_blank():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    blanks_before = int(state.session.df.iloc[:, 9].isna().sum())
+    assert blanks_before > 0
+
+    client.post("/api/clean_values", json={"replacements": {"Agree": "4"}})
+    column = state.session.df.iloc[:, 9]
+
+    # blanks stay blank rather than becoming the literal text "nan"
+    assert int(column.isna().sum()) == blanks_before
+    assert "nan" not in {value for value in column if isinstance(value, str)}
+
+    # and a scale built on that column does not offer "nan" as an answer
+    client.post("/api/groups/create", json={"name": "G", "columns": [column.name]})
+    created = client.post("/api/create_scale", json={"group": "G"}).get_json()["scale"]
+    assert all(option["label"] != "nan" for option in created["options"])
+
+
 def test_scale_declaration_rules():
     client = fresh_client()
     prepared_survey(client)
@@ -646,8 +808,9 @@ def test_groups_console_command():
     client.post("/api/create_scale", json={"group": "Wellbeing", "name": "WEMWBS"})
     assert "[Wellbeing] scale 'WEMWBS'" in client.post(
         "/api/command", json={"command": "groups"}).get_json()["output"]
-    assert "[WEMWBS] from group 'Wellbeing', 5 column(s)" in client.post(
-        "/api/command", json={"command": "scales"}).get_json()["output"]
+    scales_output = client.post("/api/command", json={"command": "scales"}).get_json()["output"]
+    assert "[WEMWBS] from group 'Wellbeing': 5 item(s) (0 reverse)" in scales_output
+    assert "options: 1=1, 2=2, 3=3, 4=4, 5=5" in scales_output
 
 
 def test_markdown_fallback_renderer():

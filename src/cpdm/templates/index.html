@@ -42,8 +42,10 @@
             <button class="nav-btn">Scales</button>
             <div class="dropdown">
                 <div class="dropdown-item" onclick="openCreateScaleModal()">Create Scale</div>
+                <div class="dropdown-item" onclick="openAssignScoringModal()">Assign Scoring</div>
+                <div class="dropdown-item" onclick="openAssignTypesModal()">Assign Scoring Type</div>
+                <div class="dropdown-item" onclick="openApplyScoringModal()">Apply Scoring to Data</div>
                 <div class="dropdown-item" onclick="openNumeriseModal()">Numerise</div>
-                <div class="dropdown-item" onclick="openScoringModal()">Scoring</div>
             </div>
         </div>
 
@@ -156,7 +158,9 @@
                 </div>
 
                 <label class="muted">Group</label>
-                <select id="scale-group" style="width:100%; margin:4px 0 10px;"></select>
+                <select id="scale-group" style="width:100%; margin:4px 0 10px;"
+                        onchange="previewScaleGroup()"></select>
+                <div id="scale-group-preview"></div>
 
                 <label class="muted">Scale name (optional)</label>
                 <div style="display:flex; gap:10px; margin:4px 0 6px;">
@@ -195,14 +199,38 @@
         </div>
     </div>
 
-    <!-- Scoring -->
-    <div id="modal-scoring" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">Scales &#8594; Scoring Assignment</div>
-            <div class="modal-body" id="scoring-body"></div>
+    <!-- Assign Scoring: a number for each response option -->
+    <div id="modal-assign-scoring" class="modal">
+        <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header">Scales &#8594; Assign Scoring</div>
+            <div class="modal-body" id="assign-scoring-body"></div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('modal-scoring')">Cancel</button>
-                <button class="btn btn-primary" onclick="applyScoring()">Apply Scoring</button>
+                <button class="btn btn-secondary" onclick="closeModal('modal-assign-scoring')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitOptions()">Save options</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assign Scoring Type: Direct or Reverse for each item -->
+    <div id="modal-assign-types" class="modal">
+        <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header">Scales &#8594; Assign Scoring Type</div>
+            <div class="modal-body" id="assign-types-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-assign-types')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitItemTypes()">Save types</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Apply Scoring: preview, then write the numbers into the data -->
+    <div id="modal-apply-scoring" class="modal">
+        <div class="modal-content" style="max-width: 860px;">
+            <div class="modal-header">Scales &#8594; Apply Scoring to Data</div>
+            <div class="modal-body" id="apply-scoring-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-apply-scoring')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitApplyScoring()">Apply scoring</button>
             </div>
         </div>
     </div>

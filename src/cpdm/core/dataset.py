@@ -46,7 +46,6 @@ class Dataset:
         self.categories = {}
         self.groups = []
         self.scales = []
-        self.scoring_config = {}
         self.cleaning_rules = empty_cleaning_rules()
 
     # --- loading -------------------------------------------------------
@@ -57,7 +56,6 @@ class Dataset:
         self.categories = {col: UNCATEGORISED for col in df.columns}
         self.groups = []
         self.scales = []
-        self.scoring_config = {}
         self.cleaning_rules = empty_cleaning_rules()
         return {"filename": self.filename, "rows": len(df), "cols": list(df.columns)}
 
@@ -154,11 +152,23 @@ class Dataset:
         return list(self.df.columns)
 
     def remap_groups(self, rename_map=None):
-        """Follow renames into the group tree and drop columns that are gone."""
+        """Follow renames into the groups and scales; drop columns that are gone."""
         live = set(self.df.columns) if self.df is not None else set()
+        rename_map = rename_map or {}
+
         for group in self.groups:
-            renamed = [(rename_map or {}).get(col, col) for col in group["columns"]]
+            renamed = [rename_map.get(col, col) for col in group["columns"]]
             group["columns"] = [col for col in renamed if col in live]
+
+        # a scale's per-item scoring types are keyed by column name
+        for scale in self.scales:
+            items = scale.get("items", {})
+            scale["items"] = {
+                rename_map.get(col, col): cfg
+                for col, cfg in items.items()
+                if rename_map.get(col, col) in live
+            }
+
         self.refresh_categories()
         return self.groups
 

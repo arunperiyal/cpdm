@@ -53,6 +53,8 @@ Two rules govern this step:
 
 Values already mapped are hidden the next time you open the step, so a second pass only shows what is left.
 
+> For Likert answers, prefer [Scales → Assign Scoring](/docs/help/scales-and-scoring) over this step. It matches whole cells rather than substrings, applies only inside one scale's columns, and keeps the response order and scores together where you can see them. Use value replacement for tidying answers up — spelling, casing, stray wording — rather than for coding them.
+
 ## 3. Save Cleaning File (.json)
 
 Writes the recorded recipe. The `steps` list is the important part: it is an ordered log of what you did, because trimming and then renaming produces a different dataset from renaming and then trimming.
@@ -88,7 +90,7 @@ Because the recipe starts from the original header names, apply it to an untouch
 Open file
   └─ Remove Non-English      (bulk, mechanical)
        └─ Header Mapping      (rename + choose ignored columns)
-            └─ Value Replacement  (Likert text → numbers)
+            └─ Value Replacement  (tidy up inconsistent answers)
                  └─ Save Cleaning File
 ```
 

@@ -23,25 +23,51 @@ Type `scales` at the prompt to see the same list from the console.
 
 Give each scale its own prefix (`WB_`, `DS_`) if you numerise more than one, otherwise the second run will produce names that collide with the first. Renaming here is permanent for the session, so do it after you are happy with your groups — they follow the rename automatically.
 
-## Scoring
+## Items and Options
 
-**Scales → Scoring** lists every scale item with two settings:
+A scale describes itself in two parts, and the Create Scale dialogue shows both as soon as you pick a group:
 
-- **Type** — *Direct* leaves the number as it is; *Reverse* flips it.
-- **Max Score** — the top of the response scale (5 for a 1–5 Likert, 7 for 1–7).
+- **Items** are its columns — the questions.
+- **Options** are its response set — the answers, read from the data.
 
-Applying scoring does two things to each listed column: it converts the column to numbers (anything unparseable becomes blank), and for reverse items it replaces each value `x` with `(1 + max) − x`.
+Both come from the group. Options are seeded from the values actually present in the columns; if those values are already numbers, they arrive in numeric order scored as themselves, and there is nothing left to do.
 
-So on a 1–5 scale: 1↔5, 2↔4, 3 stays 3.
+## Assign Scoring — a number for each option
 
-Set *Max Score* to the real maximum of your scale. Using 5 on a 1–7 scale produces silently wrong numbers — negative values for the top two response options. The background is in [Reverse Scoring](/docs/theory/reverse-scoring).
+**Scales → Assign Scoring** lists the options in order, each with a score.
 
-Run scoring **once**. Applying it a second time reverses the reversal.
+| Control | What it is for |
+| --- | --- |
+| ↑ ↓ | Put the options in response order — *Strongly Disagree* first, *Strongly Agree* last. |
+| Score | The number that answer becomes. |
+| **Number 1…n** / **n…1** | Fill the scores from the current order, which is the usual Likert case. |
+| Add | An option nobody happened to choose. A five-point scale where nobody picked the bottom still needs that option, or its score will be missing from the range. |
+| **Find new answers in the data** | Re-scan the columns and append anything not on the list — useful after further cleaning. |
+| × | Remove an option. Answers matching a removed option become blank when you apply. |
+
+**Leave a score blank** for an answer that should count as missing rather than as a number — *Not applicable*, *Prefer not to say*. Those cells become blank, and, importantly, the option stays out of the scale's range: a blank-scored sixth option does not turn a 1–5 scale into a 1–6 one.
+
+The line at the bottom shows the range you have built and the reversal it implies.
+
+## Assign Scoring Type — direct or reverse per item
+
+**Scales → Assign Scoring Type** lists the scale's items with a *Direct* / *Reverse* choice each, plus *all direct* / *all reverse* buttons.
+
+There is no maximum to type in. Reverse items are flipped with `min + max − value` taken from the scale's own option scores, so a 1–7 scale reverses as `8 − value` without being told. That removes the commonest way to corrupt a dataset silently. The background is in [Reverse Scoring](/docs/theory/reverse-scoring).
+
+## Apply Scoring to Data
+
+**Scales → Apply Scoring to Data** shows what would happen before it happens: per item, how many cells will be scored, how many are blank, and — in yellow — any answer the option list does not cover. Those would become blank, so an unexpected entry there usually means an option is missing or spelled differently.
+
+Applying replaces each answer with its option's score **within that scale's columns only**, then flips the reverse items. Columns outside the scale are untouched, which is the main advantage over coding Likert answers with a global find-and-replace in the cleaning wizard.
+
+Apply **once**. A second pass would find numbers where it expects labels, and reverse the reversal.
 
 ## Order of operations
 
 ```
-Groups  →  Create Scale  →  (Numerise)  →  Scoring  →  Compute
+Groups  →  Create Scale  →  Assign Scoring  →  Assign Scoring Type
+        →  Apply Scoring  →  (Numerise)  →  Compute
 ```
 
-Scoring before value replacement will not work: the items must already hold numbers, or text that converts cleanly to numbers.
+You no longer need to convert Likert text to numbers in the cleaning wizard — the scale does it, per scale, on exact whole-cell matches. Clean the text so the answers are consistent, then let the scale score them.

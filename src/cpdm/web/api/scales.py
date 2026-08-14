@@ -1,6 +1,6 @@
 """Scales: declaring them on a group, numerising and scoring them."""
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 from cpdm.core import groups, scales, state
 from cpdm.web.api.support import api_route, ok, payload
@@ -44,6 +44,57 @@ def delete_scale():
     return ok(defined_scales=defined)
 
 
+@api_route(bp, "/scales/inspect_group", methods=["POST"])
+def inspect_group():
+    """The items and options a scale on this group would start with."""
+    return jsonify(scales.inspect_group(state.session, payload().get("group")))
+
+
+@api_route(bp, "/scales/<name>", methods=["GET"])
+def describe_scale(name):
+    return jsonify(scales.describe(state.session, name))
+
+
+@api_route(bp, "/scales/options", methods=["POST"])
+def set_options():
+    body = payload()
+    return ok(scale=scales.set_options(state.session, body.get("name"), body.get("options")))
+
+
+@api_route(bp, "/scales/options/refresh", methods=["POST"])
+def refresh_options():
+    result = scales.refresh_options(state.session, payload().get("name"))
+    return ok(added=result["added"], scale=result["detail"])
+
+
+@api_route(bp, "/scales/options/autoscore", methods=["POST"])
+def autoscore_options():
+    body = payload()
+    detail = scales.autoscore_options(
+        state.session, body.get("name"),
+        start=body.get("start", 1), step=body.get("step", 1),
+    )
+    return ok(scale=detail)
+
+
+@api_route(bp, "/scales/items", methods=["POST"])
+def set_item_types():
+    body = payload()
+    return ok(scale=scales.set_item_types(state.session, body.get("name"), body.get("items")))
+
+
+@api_route(bp, "/scales/score/preview", methods=["GET", "POST"])
+def preview_scoring():
+    names = payload().get("names") if request.method == "POST" else None
+    return jsonify({"plans": scales.preview_scoring(state.session, names)})
+
+
+@api_route(bp, "/scales/score", methods=["POST"])
+def apply_scoring():
+    applied = scales.apply_scoring(state.session, payload().get("names"))
+    return ok(applied=applied)
+
+
 @api_route(bp, "/numerise", methods=["POST"])
 def numerise():
     body = payload()
@@ -53,9 +104,3 @@ def numerise():
         target_scale=body.get("target_scale"),
     )
     return ok(cols=cols)
-
-
-@api_route(bp, "/scoring", methods=["POST"])
-def scoring():
-    applied = scales.apply_scoring(state.session, payload().get("configs", {}))
-    return ok(columns_scored=len(applied))

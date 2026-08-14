@@ -125,10 +125,16 @@ def apply_value_replacements(dataset, replacements):
     for col in dataset.active_columns():
         if dataset.is_numeric(col):
             continue
-        series = dataset.df[col].astype(str)
+
+        series = dataset.df[col]
+        present = series.notna()          # keep blanks blank: astype(str) would
+        text = series[present].astype(str)  # otherwise write the literal "nan"
         for old_value, new_value in ordered:
-            series = series.str.replace(old_value, new_value, regex=False)
-        dataset.df[col] = series
+            text = text.str.replace(old_value, new_value, regex=False)
+
+        updated = series.astype(object).copy()
+        updated[present] = text
+        dataset.df[col] = updated
         changed += 1
 
     return changed

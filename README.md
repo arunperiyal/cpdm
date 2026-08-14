@@ -109,7 +109,7 @@ the whole tree, a search box, an *only ungrouped* filter, and a running count of
 columns are still unfiled. Choosing a subgroup files the column under its parent too.
 
 A column belongs to one group per level (reassigning moves it and says so), shrinking a
-group trims its subgroups, and renames from Numerise are followed automatically. Deleting
+group trims its subgroups, and renames of a scale's items are followed automatically. Deleting
 a group removes its subgroups and any scale declared on them. `groups` at the prompt
 prints the tree, with the scale each group backs.
 
@@ -140,12 +140,19 @@ one. Leaving a score **blank** marks that answer as missing by design — *Not a
 buttons. There is no maximum to type: reverse items use `min + max − value` from the
 scale's own option scores, so a 1–7 scale reverses as `8 − value` without being told.
 
-**Apply Scoring to Data** — previews per item how many cells will be scored, how many are
-blank, and any answer the option list does not cover (which would become blank), then
-writes the scores **within that scale's columns only** and flips the reverse items.
+**Scoring is applied as you define it** — there is no apply step. Saving the options or
+the item types scores that scale's columns immediately, **within its own columns only**.
+It is safe to redo: the answers each item held before it was first scored are kept, and
+every pass recomputes from those rather than from the numbers already in the column, so
+changing a score or a keying gives the right result and saving twice changes nothing.
+Deleting a scale puts the answers back.
 
-**Numerise** — bulk-renames the columns of one scale group (or of all of them) to
-`Scale_1`, `Scale_2`, … with a configurable prefix, following column order.
+**View Scoring** — per item: its keying, how many cells are scored, how many blank, and
+any answer no option covers (those cells are blank).
+
+**Rename items** — a scale can rename its own columns to `<scale>_1`, `<scale>_2`, … in
+column order, either as a checkbox when the scale is created or later with a prefix of
+your choosing. Clashes with columns outside the scale are refused.
 
 ### Compute
 
@@ -220,7 +227,7 @@ Regenerate them with `python samples/generate_samples.py` (synthetic, fixed seed
   all requests; there is no multi-user isolation, no persistence, and no undo. Restarting
   the server discards the working data. Export before you quit.
 - **Cleaning recipes record text rules, renames and replacements** — groups, scales,
-  scoring, numerise and computed columns are not part of the exported `.json`.
+  scoring and computed columns are not part of the exported `.json`.
 - **Text replacement is substring-based**, not whole-cell: mapping `Yes` → `1` also
   rewrites `Yes, always`. Use the ignore and exempt lists to protect free text.
 - Not yet implemented from the original project outline: **form creation**, **data
@@ -248,7 +255,7 @@ src/cpdm/
         recipes.py           Saving and replaying cleaning recipes
         groups.py            The field group tree
         column_spec.py       Typed column selections: names, ranges, globs
-        scales.py            Scales declared on groups, numerise, scoring
+        scales.py            Scales: options, item keying, scoring, renaming
         compute.py           Row-wise statistics
         console.py           Command prompt handlers
         docs_library.py      Discovery of docs/*.md
@@ -294,12 +301,12 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `POST` | `/api/groups/assign` | Set each column's group directly |
 | `POST` | `/api/groups/eligible` | Columns a group or subgroup may take |
 | `POST` | `/api/groups/resolve_spec` | Resolve a typed column spec |
-| `POST` | `/api/numerise` | Rename scale columns with a prefix |
+| `POST` | `/api/scales/rename_items` | Rename a scale's columns after it |
 | `GET` | `/api/scales/<name>` | One scale's items and options |
 | `POST` | `/api/scales/inspect_group` | Items and options a scale on a group would get |
 | `POST` | `/api/scales/options`, `/api/scales/options/refresh`, `/api/scales/options/autoscore` | Edit the option list |
 | `POST` | `/api/scales/items` | Direct/reverse per item |
-| `POST` | `/api/scales/score/preview`, `/api/scales/score` | Preview and apply scoring |
+| `GET`/`POST` | `/api/scales/status` | What the scoring currently does |
 | `POST` | `/api/compute` | Row-wise statistic into a new column |
 | `POST` | `/api/command` | Console commands |
 | `GET` | `/api/docs`, `/api/docs/<section>/<slug>` | Doc listing and rendered page |
@@ -310,7 +317,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Thirty-two end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Thirty-five end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
@@ -321,7 +328,8 @@ spec, scales declared on nested groups with the deepest winning, the rules that 
 bad declaration, survival through renames and deletion, and the spec parser), and scale
 scoring (option seeding and ordering, hand-added and deliberately unscored options,
 per-item direct/reverse, the no-mutation preview, unrecognised answers being reported
-rather than dropped, and blanks surviving value replacement).
+rather than dropped, blanks surviving value replacement, scoring being idempotent and
+reversible, a scale renaming its own items, and deleting a scale restoring the answers).
 
 ---
 

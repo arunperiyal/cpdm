@@ -46,6 +46,7 @@ class Dataset:
         self.categories = {}
         self.groups = []
         self.scales = []
+        self.answers = {}
         self.cleaning_rules = empty_cleaning_rules()
 
     # --- loading -------------------------------------------------------
@@ -56,6 +57,7 @@ class Dataset:
         self.categories = {col: UNCATEGORISED for col in df.columns}
         self.groups = []
         self.scales = []
+        self.answers = {}
         self.cleaning_rules = empty_cleaning_rules()
         return {"filename": self.filename, "rows": len(df), "cols": list(df.columns)}
 
@@ -160,6 +162,12 @@ class Dataset:
             renamed = [rename_map.get(col, col) for col in group["columns"]]
             group["columns"] = [col for col in renamed if col in live]
 
+        self.answers = {
+            rename_map.get(col, col): values
+            for col, values in self.answers.items()
+            if rename_map.get(col, col) in live
+        }
+
         # a scale's per-item scoring types are keyed by column name
         for scale in self.scales:
             items = scale.get("items", {})
@@ -171,6 +179,33 @@ class Dataset:
 
         self.refresh_categories()
         return self.groups
+
+    # --- the answers behind a scored column -------------------------------
+    def keep_answers(self, column):
+        """Remember a column's answers the first time it is scored.
+
+        Scoring then always works from these rather than from whatever is in
+        the column now, so it can be redone as often as you like: change a
+        score, change a keying, and the column is recomputed from the answers
+        instead of from the numbers the last pass left behind.
+        """
+        if column not in self.answers:
+            self.answers[column] = self.df[column].copy()
+        return self.answers[column]
+
+    def answers_for(self, column):
+        """The original answers if the column has been scored, else the column."""
+        if column in self.answers:
+            return self.answers[column]
+        return self.df[column] if column in self.df.columns else None
+
+    def forget_answers(self, columns=None):
+        """Drop remembered answers so the current values are read afresh."""
+        if columns is None:
+            self.answers = {}
+            return
+        for column in columns:
+            self.answers.pop(column, None)
 
     # --- recipe ----------------------------------------------------------
     def record_step(self, op, **fields):

@@ -54,7 +54,7 @@ Create the groups under **Build groups** first; the dropdown can only offer grou
 
 ## What groups drive
 
-The tree is the only place column membership is decided. Which of those groups are scales is decided in Scales → Create Scale, and the two together give every column its category: `Scale: <name>` for the deepest scale holding it, `Uncategorised` for everything else. That is what Scoring, Numerise and Compute read.
+The tree is the only place column membership is decided. Which of those groups are scales is decided in Scales → Create Scale, and the two together give every column its category: `Scale: <name>` for the deepest scale holding it, `Uncategorised` for everything else. That is what Scoring and Compute read.
 
 Deleting a group removes it, everything beneath it, and any scale declared on them — the log says which. It never touches the data: the columns simply become ungrouped.
 
@@ -62,7 +62,7 @@ Deleting a group removes it, everything beneath it, and any scale declared on th
 
 **A column belongs to one group per level.** Putting `WB5` into a new group takes it out of whichever group held it before, and the log says which: *"Moved 1 column(s) out of 'Wellbeing'"*. The same applies to sibling subgroups, so a subscale item cannot sit in two subscales at once.
 
-**Subgroups follow their parent.** Shrink a group and its subgroups lose the columns that left; the log reports how many. Rename columns with Scales → Numerise and every group follows the rename automatically.
+**Subgroups follow their parent.** Shrink a group and its subgroups lose the columns that left; the log reports how many. Rename a scale's items from the Scales menu and every group follows the rename automatically.
 
 ## Checking the tree
 

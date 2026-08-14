@@ -17,11 +17,11 @@ Build the groups first in [Fields → Groups](/docs/help/field-groups); a group 
 
 Type `scales` at the prompt to see the same list from the console.
 
-## Numerise (optional)
+## Naming the items after the scale
 
-**Scales → Numerise** renames the items of one scale — or of every scale — to `Scale_1`, `Scale_2`, … using the prefix you choose. Numbering follows the current column order.
+A raw item header is the whole question. Tick **Rename its items** when you create the scale and its columns become `<scale>_1`, `<scale>_2`, … in column order — `WEMWBS_1`, `WEMWBS_5` — so a header says which instrument it belongs to and where it sits.
 
-Give each scale its own prefix (`WB_`, `DS_`) if you numerise more than one, otherwise the second run will produce names that collide with the first. Renaming here is permanent for the session, so do it after you are happy with your groups — they follow the rename automatically.
+You can also do it later, or with a different prefix, from **Rename items** beside the scale in the Create Scale dialogue. Spaces in a scale name become underscores (`Digital Stress` → `Digital_Stress_1`), and a rename that would collide with a column outside the scale is refused rather than silently taken. Groups, item keying and remembered answers all follow the rename.
 
 ## Items and Options
 
@@ -55,19 +55,23 @@ The line at the bottom shows the range you have built and the reversal it implie
 
 There is no maximum to type in. Reverse items are flipped with `min + max − value` taken from the scale's own option scores, so a 1–7 scale reverses as `8 − value` without being told. That removes the commonest way to corrupt a dataset silently. The background is in [Reverse Scoring](/docs/theory/reverse-scoring).
 
-## Apply Scoring to Data
+## Scoring happens as you define it
 
-**Scales → Apply Scoring to Data** shows what would happen before it happens: per item, how many cells will be scored, how many are blank, and — in yellow — any answer the option list does not cover. Those would become blank, so an unexpected entry there usually means an option is missing or spelled differently.
+There is no apply step. Saving the options or the item types scores the scale's columns straight away: each answer becomes its option's score, **within that scale's columns only**, and the reverse items are flipped. Columns outside the scale are untouched, which is the main advantage over coding Likert answers with a global find-and-replace in the cleaning wizard.
 
-Applying replaces each answer with its option's score **within that scale's columns only**, then flips the reverse items. Columns outside the scale are untouched, which is the main advantage over coding Likert answers with a global find-and-replace in the cleaning wizard.
+You can redo it as often as you like. CPDM keeps each item's original answers the first time it scores them, and every later pass recomputes from those answers rather than from the numbers already in the column. So changing a score, adding an option or flipping a keying gives the right result, and saving the same definition twice changes nothing.
 
-Apply **once**. A second pass would find numbers where it expects labels, and reverse the reversal.
+**Deleting a scale puts the answers back**, undoing its scoring, since the group and its columns outlive the scale.
+
+## View Scoring
+
+**Scales → View Scoring** shows what the scoring currently does: per item, its keying, how many cells are scored, how many are blank, and — in yellow — any answer the option list does not cover. Those cells are blank, so an entry there usually means an option is missing or spelled differently. Each scale has an *Edit scoring* button next to it.
 
 ## Order of operations
 
 ```
-Groups  →  Create Scale  →  Assign Scoring  →  Assign Scoring Type
-        →  Apply Scoring  →  (Numerise)  →  Compute
+Groups  →  Create Scale  →  Assign Scoring  →  Assign Scoring Type  →  Compute
+                                  (View Scoring to check)
 ```
 
 You no longer need to convert Likert text to numbers in the cleaning wizard — the scale does it, per scale, on exact whole-cell matches. Clean the text so the answers are consistent, then let the scale score them.

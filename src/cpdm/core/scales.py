@@ -96,6 +96,10 @@ def _as_number(label):
 def observed_options(dataset, columns):
     """Distinct answers across some columns.
 
+    Reads the remembered answers for columns that have been scored, so the
+    option list keeps showing the labels people chose rather than the numbers
+    scoring has since written.
+
     Answers that are all numbers come back in numeric order — data that has
     already been coded needs no reordering. Anything else keeps the order it
     first appears in, which is as good a starting point as any before you set
@@ -110,7 +114,7 @@ def observed_options(dataset, columns):
     for col in columns:
         if col not in dataset.df.columns:
             continue
-        for value in dataset.df[col]:
+        for value in dataset.answers_for(col):
             if pd.isna(value):
                 continue
             label = str(value).strip()
@@ -143,7 +147,44 @@ def inspect_group(dataset, group_name):
     }
 
 
-def create_scale(dataset, group_name, name=None):
+def item_prefix(label):
+    """A column-name-safe prefix from a scale name: 'Digital Stress' -> 'Digital_Stress'."""
+    return "_".join(str(label).split()) or "Scale"
+
+
+def rename_items(dataset, name, prefix=None):
+    """Rename a scale's columns to <prefix>_1, <prefix>_2, … in column order.
+
+    The prefix defaults to the scale's own name, so the headers say which
+    instrument they belong to and in what order.
+    """
+    scale = require_scale(dataset, name)
+    columns = set(scale_columns(dataset, scale))
+    if not columns:
+        raise ValueError(f"Scale '{name}' has no items to rename.")
+
+    stem = item_prefix(prefix or scale["name"])
+    rename_map = {}
+    counter = 1
+    for col in dataset.df.columns:
+        if col in columns:
+            new_name = f"{stem}_{counter}"
+            if new_name != col:
+                rename_map[col] = new_name
+            counter += 1
+
+    taken = set(dataset.df.columns) - columns
+    clashes = sorted(set(rename_map.values()) & taken)
+    if clashes:
+        raise ValueError(
+            "These names are already used by other columns: " + ", ".join(clashes)
+        )
+
+    dataset.rename(rename_map)
+    return {"renamed": rename_map, "columns": scale_columns(dataset, scale)}
+
+
+def create_scale(dataset, group_name, name=None, rename=False):
     """Declare the columns of a group to be a scale, seeded from the data."""
     dataset.require_df()
 
@@ -175,16 +216,33 @@ def create_scale(dataset, group_name, name=None):
     }
     dataset.scales.append(scale)
     dataset.refresh_categories()
+
+    if rename:
+        rename_items(dataset, name)
+    # numeric answers score themselves, so such a scale is ready at once
+    rescore(dataset, name)
     return scale
 
 
 def delete_scale(dataset, name):
-    """Undeclare a scale. Its group and columns are untouched."""
-    if find_scale(dataset, name) is None:
-        raise ValueError(f"No scale named '{name}'.")
-    dataset.scales = [scale for scale in dataset.scales if scale["name"] != name]
+    """Undeclare a scale, putting back the answers its scoring overwrote.
+
+    The group and its columns stay; the columns simply hold what they held
+    before the scale scored them. That makes scoring reversible in a tool that
+    has no undo.
+    """
+    scale = require_scale(dataset, name)
+
+    restored = []
+    for column in scale_columns(dataset, scale):
+        if column in dataset.answers and column in dataset.df.columns:
+            dataset.df[column] = dataset.answers[column]
+            restored.append(column)
+    dataset.forget_answers(restored)
+
+    dataset.scales = [entry for entry in dataset.scales if entry["name"] != name]
     dataset.refresh_categories()
-    return dataset.defined_scales
+    return {"defined_scales": dataset.defined_scales, "restored": restored}
 
 
 def scale_summary(dataset):
@@ -263,6 +321,7 @@ def set_options(dataset, name, options):
         cleaned.append({"label": label, "score": _clean_score(entry.get("score"))})
 
     scale["options"] = cleaned
+    rescore(dataset, name)
     return describe(dataset, name)
 
 
@@ -278,6 +337,7 @@ def refresh_options(dataset, name):
     )
     scale["options_truncated"] = truncated
 
+    rescore(dataset, name)
     return {"added": added, "detail": describe(dataset, name)}
 
 
@@ -286,6 +346,7 @@ def autoscore_options(dataset, name, start=1, step=1):
     scale = require_scale(dataset, name)
     for index, option in enumerate(scale.get("options", [])):
         option["score"] = _clean_score(start + index * step)
+    rescore(dataset, name)
     return describe(dataset, name)
 
 
@@ -303,26 +364,8 @@ def set_item_types(dataset, name, types):
             raise ValueError(f"Scoring type must be one of: {', '.join(TYPES)}")
         stored[column] = {"type": item_type}
 
+    rescore(dataset, name)
     return describe(dataset, name)
-
-
-# --- numerisation --------------------------------------------------------
-def numerise(dataset, prefix="Scale_", target_scale=None):
-    """Rename a scale's columns to <prefix>1, <prefix>2, ... in column order."""
-    dataset.require_df()
-
-    scale_cols = set(dataset.scale_columns(target_scale))
-    if not scale_cols:
-        raise ValueError("No columns categorized under the selected scale(s).")
-
-    rename_map = {}
-    counter = 1
-    for col in dataset.df.columns:
-        if col in scale_cols:
-            rename_map[col] = f"{prefix}{counter}"
-            counter += 1
-
-    return dataset.rename(rename_map)
 
 
 # --- scoring the data -----------------------------------------------------
@@ -333,7 +376,7 @@ def _scored_series(dataset, column, score_by_label, known_labels, flip):
     applicable" and the like — becomes blank without complaint. Only answers
     with no option at all are reported back as unmapped.
     """
-    original = dataset.df[column]
+    original = dataset.answers_for(column)
     labels = original.apply(lambda v: None if pd.isna(v) else str(v).strip())
 
     scored = labels.map(lambda label: score_by_label.get(label) if label else None)
@@ -347,7 +390,13 @@ def _scored_series(dataset, column, score_by_label, known_labels, flip):
     return scored, unmapped
 
 
-def _scoring_plan(dataset, names=None):
+def is_scorable(dataset, name):
+    """Whether the scale has enough of a definition to score anything."""
+    detail = describe(dataset, name)
+    return any(option["score"] is not None for option in detail["options"])
+
+
+def _scoring_plan(dataset, names=None, strict=True):
     """Work out, per scale, what scoring would do. No writes."""
     dataset.require_df()
 
@@ -363,6 +412,8 @@ def _scoring_plan(dataset, names=None):
             for option in detail["options"] if option["score"] is not None
         }
         if not score_by_label:
+            if not strict:
+                continue
             raise ValueError(
                 f"Scale '{name}' has no scored options yet. "
                 "Set them in Scales -> Assign Scoring."
@@ -400,8 +451,8 @@ def _scoring_plan(dataset, names=None):
     return plans
 
 
-def preview_scoring(dataset, names=None):
-    """What Apply Scoring would do, without touching the dataframe."""
+def scoring_status(dataset, names=None):
+    """What the scoring currently does to each item — for Scales -> View Scoring."""
     return [
         {
             "scale": plan["scale"],
@@ -415,17 +466,24 @@ def preview_scoring(dataset, names=None):
                 for item in plan["items"]
             ],
         }
-        for plan in _scoring_plan(dataset, names)
+        for plan in _scoring_plan(dataset, names, strict=False)
     ]
 
 
-def apply_scoring(dataset, names=None):
-    """Write the scores into the data: map answers, then flip reverse items."""
-    plans = _scoring_plan(dataset, names)
+def apply_scoring(dataset, names=None, strict=True):
+    """Score the data: map the remembered answers, then flip reverse items.
+
+    Safe to run as often as you like. Each item is computed from the answers
+    the column held before it was ever scored, never from the numbers a
+    previous pass wrote, so re-running cannot double-reverse or blank a scale
+    whose answers are text.
+    """
+    plans = _scoring_plan(dataset, names, strict=strict)
 
     applied = []
     for plan in plans:
         for item in plan["items"]:
+            dataset.keep_answers(item["column"])
             dataset.df[item["column"]] = item["values"]
         applied.append({
             "scale": plan["scale"],
@@ -437,3 +495,11 @@ def apply_scoring(dataset, names=None):
         })
 
     return applied
+
+
+def rescore(dataset, name):
+    """Re-apply one scale after its definition changed. Quiet if not ready."""
+    if not is_scorable(dataset, name):
+        return None
+    applied = apply_scoring(dataset, [name], strict=False)
+    return applied[0] if applied else None

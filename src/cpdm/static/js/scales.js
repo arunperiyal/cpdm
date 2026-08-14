@@ -46,6 +46,9 @@ function renderScaleList(scales) {
                             onclick="openAssignTypesModal(this.dataset.name)">Types</button>
                     <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;"
                             data-name="${escapeHtml(scale.name)}"
+                            onclick="renameScaleItems(this.dataset.name)">Rename items</button>
+                    <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;"
+                            data-name="${escapeHtml(scale.name)}"
                             onclick="removeScale(this.dataset.name)">Delete</button>
                 </span>
             </div>`).join('')
@@ -107,10 +110,16 @@ function submitCreateScale() {
     const name = document.getElementById('scale-name').value.trim();
     if (!group) { logError('Pick a group to build the scale on.'); return; }
 
-    apiPost('/api/create_scale', { group, name: name || null })
+    const rename = document.getElementById('scale-rename').checked;
+
+    apiPost('/api/create_scale', { group, name: name || null, rename })
         .then(data => {
+            const scored = data.scale.options.filter(option => option.score !== null).length;
             log(`[SUCCESS] Scale '${escapeHtml(data.scale.name)}' declared on group '${escapeHtml(data.scale.group)}' with ${data.scale.options.length} option(s) found in the data.`, 'success');
-            log('> Next: Scales -> Assign Scoring to score the options.', 'info');
+            if (rename) log(`[INFO] Items renamed to '${escapeHtml(data.scale.name)}_1', '${escapeHtml(data.scale.name)}_2', …`, 'info');
+            log(scored
+                ? '> Answers were already numbers, so the scale is scored. Set the keying in Scales -> Assign Scoring Type.'
+                : '> Next: Scales -> Assign Scoring to put the options in order and score them.', 'info');
             document.getElementById('scale-name').value = '';
             return refreshScales();
         })
@@ -119,8 +128,12 @@ function submitCreateScale() {
 
 function removeScale(name) {
     apiPost('/api/delete_scale', { scale_name: name })
-        .then(() => {
-            log(`[INFO] Scale '${escapeHtml(name)}' removed. Its group and columns are untouched.`, 'info');
+        .then(data => {
+            log(`[INFO] Scale '${escapeHtml(name)}' removed. Its group and columns stay.`, 'info');
+            if (data.restored.length) {
+                log(`[INFO] Put back the answers in ${data.restored.length} column(s) that its scoring had replaced.`, 'info');
+            }
+            refreshStatus();
             return refreshScales();
         })
         .catch(reportError);
@@ -287,6 +300,10 @@ function saveOptions(quiet) {
         if (!quiet) {
             const scored = data.scale.options.filter(o => o.score !== null).length;
             log(`[SUCCESS] Scale '${escapeHtml(data.scale.name)}': ${data.scale.options.length} option(s), ${scored} scored.`, 'success');
+            log(scored
+                ? '> The scale\'s columns now hold those scores. Scales -> View Scoring shows the result.'
+                : '> Nothing is scored yet, so the data is untouched.', 'info');
+            refreshStatus();
         }
         scaleUI.detail = data.scale;
         return data.scale;
@@ -364,40 +381,51 @@ function submitItemTypes() {
     apiPost('/api/scales/items', { name: scaleUI.detail.name, items })
         .then(data => {
             const reversed = data.scale.items.filter(item => item.type === 'Reverse').length;
-            log(`[SUCCESS] Scale '${escapeHtml(data.scale.name)}': ${reversed} of ${data.scale.items.length} item(s) reverse-keyed.`, 'success');
+            log(`[SUCCESS] Scale '${escapeHtml(data.scale.name)}': ${reversed} of ${data.scale.items.length} item(s) reverse-keyed, and the columns re-scored.`, 'success');
             closeModal('modal-assign-types');
+            refreshStatus();
             refreshScales();
         })
         .catch(reportError);
 }
 
-/* --- Apply Scoring: write the numbers into the data --------------------- */
+/* --- View Scoring: what the scoring currently does ---------------------- */
 
-function openApplyScoringModal() {
+function openViewScoringModal() {
     withDataset(state => {
         if (!state.defined_scales.length) {
             logError('No scales yet. Declare one in Scales -> Create Scale.');
             return;
         }
-        document.getElementById('apply-scoring-body').innerHTML = '<p class="muted">Working out what would change...</p>';
-        openModal('modal-apply-scoring');
+        document.getElementById('view-scoring-body').innerHTML = '<p class="muted">Reading the scales...</p>';
+        openModal('modal-view-scoring');
 
-        apiPost('/api/scales/score/preview', {})
-            .then(data => renderScoringPreview(data.plans))
+        apiPost('/api/scales/status', {})
+            .then(data => renderScoringStatus(data.plans))
             .catch(error => {
-                document.getElementById('apply-scoring-body').innerHTML =
+                document.getElementById('view-scoring-body').innerHTML =
                     `<p class="log-error">${escapeHtml(error.message)}</p>`;
             });
     });
 }
 
-function renderScoringPreview(plans) {
-    document.getElementById('apply-scoring-body').innerHTML = `
+function renderScoringStatus(plans) {
+    if (!plans.length) {
+        document.getElementById('view-scoring-body').innerHTML = `
+            <div class="muted" style="padding:14px; text-align:center;">
+                No scale has scored options yet, so nothing is being scored.<br>
+                Set the scores in <strong>Scales &#8594; Assign Scoring</strong>.
+            </div>`;
+        return;
+    }
+
+    document.getElementById('view-scoring-body').innerHTML = `
         <div class="hint-box">
-            <strong>Answers become scores</strong>
-            <span>Each item's answers are replaced by their option's score, within this
-            scale's columns only. Anything the option list does not cover is listed below
-            and would become blank.</span>
+            <strong>Scoring is applied as you define it</strong>
+            <span>Each item below holds its option's score, with reverse items flipped.
+            The answers are kept, so editing a score or a keying re-derives the column
+            rather than scoring what is already scored — and deleting a scale puts the
+            answers back.</span>
         </div>
         ${plans.map(plan => `
             <div class="preview-box">
@@ -406,9 +434,12 @@ function renderScoringPreview(plans) {
                         <strong style="color:#a6e3a1;">${escapeHtml(plan.scale)}</strong>
                         <div class="muted">scores ${plan.score_min}…${plan.score_max}; ${escapeHtml(plan.reversal_note)}</div>
                     </div>
+                    <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;"
+                            data-name="${escapeHtml(plan.scale)}"
+                            onclick="openAssignScoringModal(this.dataset.name)">Edit scoring</button>
                 </div>
                 ${plan.unscored_options.length ? `<div class="diff-warn" style="margin-bottom:8px;">
-                    Unscored option(s), treated as missing: ${escapeHtml(plan.unscored_options.join(', '))}</div>` : ''}
+                    Unscored option(s), counted as missing: ${escapeHtml(plan.unscored_options.join(', '))}</div>` : ''}
                 <table class="preview-table">
                     <thead><tr><th>Item</th><th>Type</th><th>Scored</th><th>Blank</th><th>Not recognised</th></tr></thead>
                     <tbody>${plan.items.map(item => `
@@ -423,41 +454,21 @@ function renderScoringPreview(plans) {
             </div>`).join('')}`;
 }
 
-function submitApplyScoring() {
-    apiPost('/api/scales/score', {})
+/* --- renaming a scale's items ------------------------------------------- */
+
+function renameScaleItems(name) {
+    const prefix = window.prompt(
+        `Rename the items of '${name}' to <prefix>_1, <prefix>_2, …`, name);
+    if (prefix === null) return;
+
+    apiPost('/api/scales/rename_items', { name, prefix: prefix.trim() || null })
         .then(data => {
-            data.applied.forEach(result => {
-                log(`[SUCCESS] Scored '${escapeHtml(result.scale)}': ${result.cells_scored} cell(s) across ${result.items_scored} item(s).`, 'success');
-                if (result.unmapped.length) {
-                    log(`[INFO] Blanked answers with no option in '${escapeHtml(result.scale)}': ${escapeHtml(result.unmapped.join(', '))}.`, 'info');
-                }
-            });
-            closeModal('modal-apply-scoring');
+            const count = Object.keys(data.renamed).length;
+            log(count
+                ? `[SUCCESS] Renamed ${count} item(s): ${escapeHtml(data.columns.join(', '))}.`
+                : '[INFO] The items already have those names.', 'success');
+            refreshScales();
             refreshStatus();
-        })
-        .catch(reportError);
-}
-
-/* --- numerise ---------------------------------------------------------- */
-
-function openNumeriseModal() {
-    withDataset(state => {
-        const select = document.getElementById('num-target-scale');
-        select.innerHTML = '<option value="">-- All Scale Groups --</option>' +
-            state.defined_scales.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
-        openModal('modal-numerise');
-    });
-}
-
-function applyNumerise() {
-    const prefix = document.getElementById('num-prefix').value;
-    const targetScale = document.getElementById('num-target-scale').value;
-
-    apiPost('/api/numerise', { prefix, target_scale: targetScale || null })
-        .then(data => {
-            log(`[SUCCESS] Scale column headers renamed with prefix '${escapeHtml(prefix)}'.`, 'success');
-            log('Updated Columns: ' + escapeHtml(data.cols.join(', ')));
-            closeModal('modal-numerise');
         })
         .catch(reportError);
 }

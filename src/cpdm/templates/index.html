@@ -44,8 +44,7 @@
                 <div class="dropdown-item" onclick="openCreateScaleModal()">Create Scale</div>
                 <div class="dropdown-item" onclick="openAssignScoringModal()">Assign Scoring</div>
                 <div class="dropdown-item" onclick="openAssignTypesModal()">Assign Scoring Type</div>
-                <div class="dropdown-item" onclick="openApplyScoringModal()">Apply Scoring to Data</div>
-                <div class="dropdown-item" onclick="openNumeriseModal()">Numerise</div>
+                <div class="dropdown-item" onclick="openViewScoringModal()">View Scoring</div>
             </div>
         </div>
 
@@ -167,6 +166,10 @@
                     <input type="text" id="scale-name" placeholder="defaults to the group name" style="flex:1;">
                     <button class="btn btn-primary" onclick="submitCreateScale()">Create</button>
                 </div>
+                <label class="muted" style="display:flex; align-items:center; gap:6px; margin:0 0 8px;">
+                    <input type="checkbox" id="scale-rename">
+                    Rename its items to &lt;scale&gt;_1, &lt;scale&gt;_2, …
+                </label>
                 <div id="scale-form-note" class="muted" style="margin-bottom:16px;"></div>
 
                 <label style="font-weight:bold; display:block; margin-bottom:8px;">Declared scales</label>
@@ -174,27 +177,6 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('modal-create-scale')">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Numerise -->
-    <div id="modal-numerise" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">Scales &#8594; Numerise Headers</div>
-            <div class="modal-body">
-                <div style="margin-bottom: 15px;">
-                    <label>Target Scale Group:</label>
-                    <select id="num-target-scale" style="width: 100%; margin-top: 5px;"></select>
-                </div>
-                <div style="margin-bottom: 15px;">
-                    <label>Prefix for scale headers:</label>
-                    <input type="text" id="num-prefix" value="Scale_" style="width: 100%; margin-top: 5px;">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('modal-numerise')">Cancel</button>
-                <button class="btn btn-primary" onclick="applyNumerise()">Apply Numerisation</button>
             </div>
         </div>
     </div>
@@ -223,14 +205,13 @@
         </div>
     </div>
 
-    <!-- Apply Scoring: preview, then write the numbers into the data -->
-    <div id="modal-apply-scoring" class="modal">
+    <!-- View Scoring: what the scoring currently does to each item -->
+    <div id="modal-view-scoring" class="modal">
         <div class="modal-content" style="max-width: 860px;">
-            <div class="modal-header">Scales &#8594; Apply Scoring to Data</div>
-            <div class="modal-body" id="apply-scoring-body"></div>
+            <div class="modal-header">Scales &#8594; View Scoring</div>
+            <div class="modal-body" id="view-scoring-body"></div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('modal-apply-scoring')">Cancel</button>
-                <button class="btn btn-primary" onclick="submitApplyScoring()">Apply scoring</button>
+                <button class="btn btn-primary" onclick="closeModal('modal-view-scoring')">Close</button>
             </div>
         </div>
     </div>

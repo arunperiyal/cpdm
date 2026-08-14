@@ -34,14 +34,17 @@ def list_scales():
 @api_route(bp, "/create_scale", methods=["POST"])
 def create_scale():
     body = payload()
-    scale = scales.create_scale(state.session, body.get("group"), body.get("name"))
+    scale = scales.create_scale(
+        state.session, body.get("group"), body.get("name"),
+        rename=bool(body.get("rename")),
+    )
     return ok(scale=scale, defined_scales=state.session.defined_scales)
 
 
 @api_route(bp, "/delete_scale", methods=["POST"])
 def delete_scale():
-    defined = scales.delete_scale(state.session, payload().get("scale_name", ""))
-    return ok(defined_scales=defined)
+    result = scales.delete_scale(state.session, payload().get("scale_name", ""))
+    return ok(defined_scales=result["defined_scales"], restored=result["restored"])
 
 
 @api_route(bp, "/scales/inspect_group", methods=["POST"])
@@ -83,24 +86,15 @@ def set_item_types():
     return ok(scale=scales.set_item_types(state.session, body.get("name"), body.get("items")))
 
 
-@api_route(bp, "/scales/score/preview", methods=["GET", "POST"])
-def preview_scoring():
+@api_route(bp, "/scales/status", methods=["GET", "POST"])
+def scoring_status():
+    """What the scoring currently does — Scales -> View Scoring reads this."""
     names = payload().get("names") if request.method == "POST" else None
-    return jsonify({"plans": scales.preview_scoring(state.session, names)})
+    return jsonify({"plans": scales.scoring_status(state.session, names)})
 
 
-@api_route(bp, "/scales/score", methods=["POST"])
-def apply_scoring():
-    applied = scales.apply_scoring(state.session, payload().get("names"))
-    return ok(applied=applied)
-
-
-@api_route(bp, "/numerise", methods=["POST"])
-def numerise():
+@api_route(bp, "/scales/rename_items", methods=["POST"])
+def rename_items():
     body = payload()
-    cols = scales.numerise(
-        state.session,
-        prefix=body.get("prefix", "Scale_"),
-        target_scale=body.get("target_scale"),
-    )
-    return ok(cols=cols)
+    result = scales.rename_items(state.session, body.get("name"), body.get("prefix"))
+    return ok(renamed=result["renamed"], columns=result["columns"])

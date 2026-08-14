@@ -77,7 +77,6 @@ def test_full_survey_workflow():
 
     client.post("/api/scales/items",
                 json={"name": "Wellbeing", "items": {"WB3": "Reverse", "WB5": "Reverse"}})
-    client.post("/api/scales/score", json={})
     assert pd.api.types.is_numeric_dtype(state.session.df["WB3"])
 
     computed = client.post(
@@ -445,22 +444,22 @@ def test_groups_survive_renames_and_scale_deletion():
 
     client.post("/api/create_scale", json={"group": "Wellbeing"})
 
-    # numerise renames the scale's columns; the tree must follow
-    client.post("/api/numerise", json={"prefix": "W", "target_scale": "Wellbeing"})
-    assert groups.find(state.session, "Wellbeing")["columns"] == ["W1", "W2", "W3", "W4", "W5"]
-    assert groups.find(state.session, "Positive affect")["columns"] == ["W1", "W2"]
+    # renaming a scale's items renames the columns; the tree must follow
+    client.post("/api/scales/rename_items", json={"name": "Wellbeing", "prefix": "W"})
+    assert groups.find(state.session, "Wellbeing")["columns"] == ["W_1", "W_2", "W_3", "W_4", "W_5"]
+    assert groups.find(state.session, "Positive affect")["columns"] == ["W_1", "W_2"]
 
     # renaming a group carries its scale along
     client.post("/api/groups/update", json={"name": "Wellbeing", "new_name": "WB"})
     assert groups.scale_on(state.session, "WB") == "Wellbeing"
-    assert state.session.categories["W1"] == "Scale: Wellbeing"
+    assert state.session.categories["W_1"] == "Scale: Wellbeing"
 
     # deleting the group takes its subgroups and its scale with it
     removed = client.post("/api/groups/delete", json={"name": "WB"}).get_json()
     assert removed["scales_removed"] == ["Wellbeing"]
     assert groups.find(state.session, "WB") is None
     assert groups.find(state.session, "Positive affect") is None
-    assert state.session.categories["W1"] == "Uncategorised"
+    assert state.session.categories["W_1"] == "Uncategorised"
     assert state.session.defined_scales == []
 
 
@@ -577,20 +576,20 @@ def test_scales_are_declared_on_groups_and_can_be_nested():
     assert {g["name"]: g["taken_by"] for g in listing["groups"]} == {
         "Scales": None, "PHQ": "PHQ-9", "GAD": "GAD"}
 
-    # Numerise and Scoring address them separately
-    client.post("/api/numerise", json={"prefix": "PHQ_", "target_scale": "PHQ-9"})
-    assert "PHQ_1" in state.session.df.columns
-    assert groups.find(state.session, "PHQ")["columns"][0] == "PHQ_1"
+    # each scale renames its own items, leaving the other scale alone
+    client.post("/api/scales/rename_items", json={"name": "PHQ-9"})
+    assert "PHQ-9_1" in state.session.df.columns
+    assert groups.find(state.session, "PHQ")["columns"][0] == "PHQ-9_1"
     assert "DS1" in state.session.df.columns
 
     # a scale on the container as well: the deeper declaration wins its columns
     client.post("/api/create_scale", json={"group": "Scales", "name": "Whole battery"})
-    assert state.session.categories["PHQ_1"] == "Scale: PHQ-9"
+    assert state.session.categories["PHQ-9_1"] == "Scale: PHQ-9"
     assert state.session.categories["Comments"] == "Uncategorised"
 
     # dropping the deeper scale hands those columns to the one above
     client.post("/api/delete_scale", json={"scale_name": "PHQ-9"})
-    assert state.session.categories["PHQ_1"] == "Scale: Whole battery"
+    assert state.session.categories["PHQ-9_1"] == "Scale: Whole battery"
     # ...and the group itself is untouched
     assert len(groups.find(state.session, "PHQ")["columns"]) == 5
 
@@ -646,18 +645,12 @@ def test_scale_items_options_and_scoring():
 
     client.post("/api/scales/items", json={"name": "Wellbeing", "items": {"WB3": "Reverse"}})
 
-    # preview first: it must not touch the data
-    before = list(state.session.df["WB1"])
-    plans = client.post("/api/scales/score/preview", json={}).get_json()["plans"]
-    assert list(state.session.df["WB1"]) == before
-    plan = plans[0]
+    # setting the scores was enough: the data is already scored
+    plan = client.post("/api/scales/status", json={}).get_json()["plans"][0]
     assert plan["reversal_note"] == "reverse = 6 - value"
     assert {item["column"]: item["type"] for item in plan["items"]} == {
         "WB1": "Direct", "WB2": "Direct", "WB3": "Reverse"}
     assert all(item["unmapped"] == [] for item in plan["items"])
-
-    applied = client.post("/api/scales/score", json={}).get_json()["applied"][0]
-    assert applied["scale"] == "Wellbeing" and applied["cells_scored"] > 0
 
     for column in ["WB1", "WB2", "WB3"]:
         assert pd.api.types.is_numeric_dtype(state.session.df[column])
@@ -679,18 +672,114 @@ def test_unrecognised_answers_are_reported_not_silently_dropped():
     kept = [o for o in detail["options"] if o["label"] != "5"]
     client.post("/api/scales/options", json={"name": "Wellbeing", "options": kept})
 
-    plan = client.post("/api/scales/score/preview", json={}).get_json()["plans"][0]
+    plan = client.post("/api/scales/status", json={}).get_json()["plans"][0]
     assert any("5" in item["unmapped"] for item in plan["items"])
 
     # an option left on the list without a score is missing by design, not an error
     blanked = [{"label": o["label"], "score": (None if o["label"] == "4" else o["score"])}
                for o in kept]
     client.post("/api/scales/options", json={"name": "Wellbeing", "options": blanked})
-    plan = client.post("/api/scales/score/preview", json={}).get_json()["plans"][0]
+    plan = client.post("/api/scales/status", json={}).get_json()["plans"][0]
     assert all("4" not in item["unmapped"] for item in plan["items"])
 
     refreshed = client.post("/api/scales/options/refresh", json={"name": "Wellbeing"}).get_json()
     assert refreshed["added"] == ["5"]
+
+
+def test_scoring_is_idempotent_and_reversible():
+    """Re-scoring must never double-flip or blank a text-answer scale."""
+    client = fresh_client()
+    upload(client, "sample_survey.xlsx")
+
+    client.post("/api/text_rules/apply", json={
+        "stage": "values",
+        "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                  {"mode": "tidy"}]})
+    likert = list(state.session.df.columns)[7:9]
+    client.post("/api/groups/create", json={"name": "WB", "columns": likert})
+    client.post("/api/create_scale", json={"group": "WB", "name": "Wellbeing"})
+    client.post("/api/scales/options", json={
+        "name": "Wellbeing",
+        "options": [{"label": label, "score": index + 1} for index, label in enumerate(
+            ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"])]})
+
+    first = list(state.session.df[likert[0]])
+    assert pd.api.types.is_numeric_dtype(state.session.df[likert[0]])
+
+    # saving the same definition again — the old bug blanked the whole scale
+    for _ in range(3):
+        client.post("/api/scales/options/refresh", json={"name": "Wellbeing"})
+        client.post("/api/scales/items", json={"name": "Wellbeing", "items": {}})
+    assert list(state.session.df[likert[0]]) == first
+
+    # a keying change re-derives from the answers, so it can be undone
+    client.post("/api/scales/items", json={"name": "Wellbeing", "items": {likert[0]: "Reverse"}})
+    reversed_values = list(state.session.df[likert[0]])
+    assert reversed_values != first
+    assert all(6 - a == b for a, b in zip(first, reversed_values) if pd.notna(a))
+
+    client.post("/api/scales/items", json={"name": "Wellbeing", "items": {likert[0]: "Direct"}})
+    assert list(state.session.df[likert[0]]) == first
+
+    # the options still show the answers, not the numbers now in the column
+    detail = client.get("/api/scales/Wellbeing").get_json()
+    assert [option["label"] for option in detail["options"]][0] == "Strongly Disagree"
+
+    # rescoring on a different scale of numbers also works from the answers
+    client.post("/api/scales/options", json={
+        "name": "Wellbeing",
+        "options": [{"label": label, "score": (index + 1) * 10} for index, label in enumerate(
+            ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"])]})
+    assert [value * 10 for value in first if pd.notna(value)] == [
+        value for value in state.session.df[likert[0]] if pd.notna(value)]
+
+
+def test_scale_renames_its_own_items():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "Items", "spec": "WB1:WB5"})
+    client.post("/api/create_scale",
+                json={"group": "Items", "name": "Digital Stress", "rename": True})
+
+    # the scale name becomes the prefix, whitespace and all
+    assert [col for col in state.session.df.columns if col.startswith("Digital")] == [
+        "Digital_Stress_1", "Digital_Stress_2", "Digital_Stress_3",
+        "Digital_Stress_4", "Digital_Stress_5"]
+    assert groups.find(state.session, "Items")["columns"][0] == "Digital_Stress_1"
+
+    # renaming again with an explicit prefix, after the fact
+    client.post("/api/scales/rename_items", json={"name": "Digital Stress", "prefix": "DS"})
+    assert "DS_3" in state.session.df.columns
+
+    # a clash with a column outside the scale is refused, not silently taken
+    client.post("/api/groups/create", json={"name": "Other", "columns": ["Age"]})
+    client.post("/api/create_scale", json={"group": "Other", "name": "Age scale"})
+    clash = client.post("/api/scales/rename_items", json={"name": "Age scale", "prefix": "DS"})
+    assert clash.status_code == 400 and "already used" in clash.get_json()["error"]
+
+
+def test_deleting_a_scale_puts_the_answers_back():
+    client = fresh_client()
+    upload(client, "sample_survey.xlsx")
+
+    likert = list(state.session.df.columns)[7:9]
+    answers = list(state.session.df[likert[0]])
+
+    client.post("/api/groups/create", json={"name": "WB", "columns": likert})
+    client.post("/api/create_scale", json={"group": "WB", "name": "Wellbeing"})
+    detail = client.get("/api/scales/Wellbeing").get_json()
+    client.post("/api/scales/options", json={
+        "name": "Wellbeing",
+        "options": [{"label": option["label"], "score": index + 1}
+                    for index, option in enumerate(detail["options"])]})
+    assert pd.api.types.is_numeric_dtype(state.session.df[likert[0]])
+
+    deleted = client.post("/api/delete_scale", json={"scale_name": "Wellbeing"}).get_json()
+    assert set(deleted["restored"]) == set(likert)
+    assert list(state.session.df[likert[0]]) == answers
+    # the group survives; only the scale went
+    assert groups.find(state.session, "WB")["columns"] == likert
 
 
 def test_scoring_needs_scored_options():
@@ -703,9 +792,11 @@ def test_scoring_needs_scored_options():
         "name": "Wellbeing",
         "options": [{"label": str(n), "score": None} for n in range(1, 6)]})
 
-    refused = client.post("/api/scales/score", json={})
-    assert refused.status_code == 400
-    assert "no scored options" in refused.get_json()["error"]
+    # with nothing scored, the data is left exactly as it was
+    before = list(state.session.df["WB1"])
+    client.post("/api/scales/items", json={"name": "Wellbeing", "items": {"WB1": "Reverse"}})
+    assert list(state.session.df["WB1"]) == before
+    assert client.post("/api/scales/status", json={}).get_json()["plans"] == []
 
     duplicate = client.post("/api/scales/options", json={
         "name": "Wellbeing", "options": [{"label": "Yes"}, {"label": "yes"}]})
@@ -728,9 +819,9 @@ def test_item_types_follow_a_rename():
     client.post("/api/create_scale", json={"group": "WB", "name": "Wellbeing"})
     client.post("/api/scales/items", json={"name": "Wellbeing", "items": {"WB3": "Reverse"}})
 
-    client.post("/api/numerise", json={"prefix": "W", "target_scale": "Wellbeing"})
+    client.post("/api/scales/rename_items", json={"name": "Wellbeing", "prefix": "W"})
     detail = client.get("/api/scales/Wellbeing").get_json()
-    assert [item["column"] for item in detail["items"]] == ["W1", "W2", "W3", "W4", "W5"]
+    assert [item["column"] for item in detail["items"]] == ["W_1", "W_2", "W_3", "W_4", "W_5"]
     assert [item["type"] for item in detail["items"]] == [
         "Direct", "Direct", "Reverse", "Direct", "Direct"]
 

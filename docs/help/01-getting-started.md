@@ -24,7 +24,7 @@ Your browser opens at `http://127.0.0.1:5000/`. Everything runs on your machine;
 1. **Get the sample data.** Help → Sample Data Files → download `sample_survey.xlsx`. It is a bilingual wellbeing survey with 30 responses, deliberately messy.
 2. **Open it.** File → Open (.xlsx / .csv).
 3. **Look at it.** Type `show` at the prompt for the first five rows, then `columns` for the full header list. The headers carry a Malayalam translation after a `/`, and the answers are text like `Agree / യോജിക്കുന്നു`.
-4. **Trim the second language.** Clean → Remove Non-English. Set both the header rule and the value rule to *Remove after character/delimiter* with `/`, and tick the comments column under *Exempt Columns* so the free text survives. See [Cleaning a Dataset](/docs/help/cleaning-workflow).
+4. **Trim the second language.** Clean → Remove Non-English / Trim Text. In stage 1, build the chain *Cut at delimiter `/` (keep before)* → *Tidy up leftovers*, press **Preview** to check the before → after list, then **Apply & continue →**. Stage 2 repeats it for the cell values; untick the comments column there so the free text survives. See [Cleaning a Dataset](/docs/help/cleaning-workflow).
 5. **Map headers and values.** Clean → Header Mapping & Value Replacement. Rename the long item texts to short codes (`WB1`, `WB2`, …), untick columns that should never be touched (name, comments), then map each Likert label to a number.
 6. **Define your scales.** Scales → Create Scale (`Wellbeing`, `Digital Stress`), then Fields → Categorise to assign each item column to one.
 7. **Score the items.** Scales → Scoring. Mark reverse-keyed items and set the maximum. See [Reverse Scoring](/docs/theory/reverse-scoring).

@@ -34,8 +34,35 @@ def clean_values():
     return ok(columns_processed=changed)
 
 
+@api_route(bp, "/text_rules/preview", methods=["POST"])
+def preview_text_rules():
+    """What a rule chain would do. Read-only: the dataset is not touched."""
+    body = payload()
+    return jsonify(
+        cleaning.preview_text_rules(
+            state.session,
+            body.get("stage", cleaning.STAGE_HEADERS),
+            body.get("rules", []),
+            body.get("columns"),
+        )
+    )
+
+
+@api_route(bp, "/text_rules/apply", methods=["POST"])
+def apply_text_rules():
+    body = payload()
+    result = cleaning.apply_text_rules(
+        state.session,
+        body.get("stage", cleaning.STAGE_HEADERS),
+        body.get("rules", []),
+        body.get("columns"),
+    )
+    return ok(result=result)
+
+
 @api_route(bp, "/clean_text_pattern", methods=["POST"])
 def clean_text_pattern():
+    """Pre-wizard endpoint: one value rule, kept as an adapter."""
     body = payload()
     processed = cleaning.trim_values(
         state.session, body.get("mode"), body.get("delimiter", "")

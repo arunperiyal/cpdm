@@ -28,10 +28,13 @@ def update_headers(dataset, header_map, ignored_cols=None):
             rename_map[old_col] = new_col
             dataset.cleaning_rules["header_map"][old_col] = new_col
 
+    resolved_ignored = None
     if ignored_cols is not None:
-        dataset.cleaning_rules["ignored_columns"] = [
-            rename_map.get(col, col) for col in ignored_cols
-        ]
+        resolved_ignored = [rename_map.get(col, col) for col in ignored_cols]
+        dataset.cleaning_rules["ignored_columns"] = resolved_ignored
+
+    if rename_map or resolved_ignored is not None:
+        dataset.record_step("header_map", map=rename_map, ignored_columns=resolved_ignored)
 
     return dataset.rename(rename_map)
 
@@ -112,6 +115,8 @@ def apply_value_replacements(dataset, replacements):
     if not value_map:
         return 0
 
+    dataset.record_step("value_replacements", map=dict(value_map))
+
     # Longest source first: otherwise mapping "Agree" would eat the tail of
     # "Strongly Agree" before its own rule ever runs.
     ordered = sorted(value_map.items(), key=lambda item: len(item[0]), reverse=True)
@@ -130,54 +135,213 @@ def apply_value_replacements(dataset, replacements):
 
 
 # --- text trimming ------------------------------------------------------
-def trim_values(dataset, mode, delimiter="", exempt_cols=None):
-    """Apply one trimming rule to the cell values of every active text column."""
-    dataset.require_df()
-    text_rules.validate(mode, delimiter)
+STAGE_HEADERS = "headers"
+STAGE_VALUES = "values"
+STAGES = (STAGE_HEADERS, STAGE_VALUES)
 
-    processed = 0
-    for col in dataset.active_columns(extra_ignored=exempt_cols):
-        if dataset.is_numeric(col):
-            continue
-        dataset.df[col] = dataset.df[col].apply(
-            lambda value: text_rules.apply_mode_to_cell(value, mode, delimiter)
-        )
-        processed += 1
-
-    return processed
+PREVIEW_ROW_CAP = 5000
+PREVIEW_EXAMPLES = 5
 
 
-def trim_headers(dataset, mode, delimiter="", exempt_cols=None):
-    """Apply one trimming rule to the column headers, avoiding name collisions."""
-    dataset.require_df()
-    text_rules.validate(mode, delimiter)
+def _validate_stage(stage):
+    if stage not in STAGES:
+        raise ValueError(f"Unknown stage '{stage}'. Expected one of: {', '.join(STAGES)}")
+    return stage
 
-    exempt = set(exempt_cols or [])
+
+def target_columns(dataset, stage, columns=None):
+    """Which columns a stage may touch.
+
+    ``columns=None`` keeps the pre-wizard defaults: every column for headers,
+    the active (non-ignored) ones for values. An explicit selection is honoured
+    as given, minus columns that no longer exist and — for values — numeric
+    ones, which have no text to trim.
+    """
+    df = dataset.require_df()
+    _validate_stage(stage)
+
+    if columns is None:
+        candidates = list(df.columns) if stage == STAGE_HEADERS else dataset.active_columns()
+    else:
+        selected = set(columns)
+        candidates = [col for col in df.columns if col in selected]
+
+    if stage == STAGE_VALUES:
+        candidates = [col for col in candidates if not dataset.is_numeric(col)]
+    return candidates
+
+
+def _planned_renames(dataset, rules, columns=None):
+    """Work out the header renames without touching the dataframe.
+
+    Shared by preview and apply so that what you see is what you get, including
+    the de-duplication suffixes.
+    """
+    targets = set(target_columns(dataset, STAGE_HEADERS, columns))
     rename_map = {}
+    rows = []
     taken = set()
 
     for col in dataset.df.columns:
-        if col in exempt:
+        name = str(col)
+        if col not in targets:
             taken.add(col)
+            rows.append({"column": name, "before": name, "after": name,
+                         "changed": False, "warning": ""})
             continue
 
-        new_col = text_rules.apply_mode(str(col), mode, delimiter).strip() or col
+        warning = ""
+        new_col = text_rules.apply_chain(name, rules).strip()
+        if not new_col:
+            new_col = col
+            warning = "the rules empty this header, so the original is kept"
+
         base, counter = new_col, 1
         while new_col in taken and new_col != col:
             new_col = f"{base}_{counter}"
             counter += 1
+        if new_col != base:
+            warning = f"'{base}' is already taken, so this becomes '{new_col}'"
 
         if new_col != col:
             rename_map[col] = new_col
-            dataset.cleaning_rules["header_map"][col] = new_col
         taken.add(new_col)
+        rows.append({"column": name, "before": name, "after": str(new_col),
+                     "changed": new_col != col, "warning": warning})
 
-    dataset.rename(rename_map)
-    return len(rename_map)
+    return rename_map, rows
+
+
+def _changed_mask(original, cleaned):
+    """Elementwise inequality that does not count NaN != NaN as a change."""
+    return (original != cleaned) & ~(original.isna() & cleaned.isna())
+
+
+def apply_text_rules(dataset, stage, rules, columns=None):
+    """Run a chain of trimming rules over the headers or the cell values."""
+    dataset.require_df()
+    _validate_stage(stage)
+    chain = text_rules.normalise_chain(rules)
+
+    if stage == STAGE_HEADERS:
+        rename_map, _ = _planned_renames(dataset, chain, columns)
+        for old_col, new_col in rename_map.items():
+            dataset.cleaning_rules["header_map"][old_col] = new_col
+        dataset.rename(rename_map)
+        result = {"headers_changed": len(rename_map), "renames": rename_map}
+    else:
+        columns_cleaned = 0
+        cells_changed = 0
+        for col in target_columns(dataset, STAGE_VALUES, columns):
+            original = dataset.df[col]
+            cleaned = original.apply(
+                lambda value: text_rules.apply_chain_to_cell(value, chain)
+            )
+            changed = int(_changed_mask(original, cleaned).sum())
+            if changed:
+                dataset.df[col] = cleaned
+                cells_changed += changed
+            columns_cleaned += 1
+        result = {"columns_cleaned": columns_cleaned, "cells_changed": cells_changed}
+
+    dataset.record_step("text_rules", stage=stage, rules=chain,
+                        columns=list(columns) if columns is not None else None)
+    result["description"] = text_rules.describe_chain(chain)
+    return result
+
+
+def preview_text_rules(dataset, stage, rules, columns=None):
+    """Show what :func:`apply_text_rules` would do. Never mutates the dataset."""
+    dataset.require_df()
+    _validate_stage(stage)
+    chain = text_rules.normalise_chain(rules)
+
+    if stage == STAGE_HEADERS:
+        _, rows = _planned_renames(dataset, chain, columns)
+        return {
+            "stage": stage,
+            "description": text_rules.describe_chain(chain),
+            "rows": rows,
+            "columns_scanned": len(rows),
+            "columns_affected": sum(1 for row in rows if row["changed"]),
+            "warnings": [row["warning"] for row in rows if row["warning"]],
+            "truncated": False,
+        }
+
+    rows = []
+    cells_changed = 0
+    truncated = False
+
+    for col in target_columns(dataset, STAGE_VALUES, columns):
+        original = dataset.df[col]
+        if len(original) > PREVIEW_ROW_CAP:
+            original = original.head(PREVIEW_ROW_CAP)
+            truncated = True
+
+        cleaned = original.apply(lambda value: text_rules.apply_chain_to_cell(value, chain))
+        mask = _changed_mask(original, cleaned)
+        changed = int(mask.sum())
+        cells_changed += changed
+
+        examples = []
+        seen = set()
+        for before, after in zip(original[mask], cleaned[mask]):
+            if before in seen:
+                continue
+            seen.add(before)
+            examples.append({"before": str(before), "after": str(after)})
+            if len(examples) >= PREVIEW_EXAMPLES:
+                break
+
+        rows.append({
+            "column": str(col),
+            "cells_changed": changed,
+            "cells_total": int(len(original)),
+            "changed": changed > 0,
+            "examples": examples,
+        })
+
+    return {
+        "stage": stage,
+        "description": text_rules.describe_chain(chain),
+        "rows": rows,
+        "columns_scanned": len(rows),
+        "columns_affected": sum(1 for row in rows if row["changed"]),
+        "cells_changed": cells_changed,
+        "warnings": [],
+        "truncated": truncated,
+    }
+
+
+# --- adapters for the pre-chain API ---------------------------------------
+def trim_values(dataset, mode, delimiter="", exempt_cols=None):
+    """Apply a single trimming rule to the active text columns."""
+    columns = None
+    if exempt_cols:
+        exempt = set(exempt_cols)
+        columns = [c for c in dataset.active_columns() if c not in exempt]
+
+    result = apply_text_rules(
+        dataset, STAGE_VALUES, [text_rules.rule_from_mode(mode, delimiter)], columns
+    )
+    return result["columns_cleaned"]
+
+
+def trim_headers(dataset, mode, delimiter="", exempt_cols=None):
+    """Apply a single trimming rule to the column headers."""
+    columns = None
+    if exempt_cols:
+        exempt = set(exempt_cols)
+        columns = [c for c in dataset.df.columns if c not in exempt]
+
+    result = apply_text_rules(
+        dataset, STAGE_HEADERS, [text_rules.rule_from_mode(mode, delimiter)], columns
+    )
+    return result["headers_changed"]
 
 
 def scrub_non_english(dataset, header_cfg=None, value_cfg=None, exempt_cols=None):
-    """Run independent header and value trimming rules in one pass."""
+    """Run independent header and value rules in one pass (pre-wizard API)."""
     dataset.require_df()
 
     header_cfg = header_cfg or {}

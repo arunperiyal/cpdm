@@ -13,8 +13,20 @@ SCALE_PREFIX = "Scale: "
 DEFAULT_SCALE = "General Scale"
 
 
+#: recipe schema version. v1 was the flat header_map / value_replacements /
+#: ignored_columns object; v2 adds an ordered ``steps`` log, which is what makes
+#: a replay reproduce trim-then-rename in the order it actually happened.
+RECIPE_VERSION = 2
+
+
 def empty_cleaning_rules():
-    return {"header_map": {}, "value_replacements": {}, "ignored_columns": []}
+    return {
+        "version": RECIPE_VERSION,
+        "steps": [],
+        "header_map": {},
+        "value_replacements": {},
+        "ignored_columns": [],
+    }
 
 
 class Dataset:
@@ -84,11 +96,22 @@ class Dataset:
         self.categories = new_categories
         return list(self.df.columns)
 
+    # --- recipe ----------------------------------------------------------
+    def record_step(self, op, **fields):
+        """Append one operation to the ordered recipe log."""
+        step = {"op": op}
+        step.update({key: value for key, value in fields.items() if value is not None})
+        self.cleaning_rules.setdefault("steps", []).append(step)
+        return step
+
     # --- reporting ------------------------------------------------------
     def has_cleaning_rules(self):
         rules = self.cleaning_rules
         return bool(
-            rules["header_map"] or rules["value_replacements"] or rules["ignored_columns"]
+            rules.get("steps")
+            or rules["header_map"]
+            or rules["value_replacements"]
+            or rules["ignored_columns"]
         )
 
     def state(self):
@@ -98,6 +121,10 @@ class Dataset:
             "filename": self.filename if self.df is not None else None,
             "rows": int(len(self.df)) if self.df is not None else 0,
             "cols": list(self.df.columns) if self.df is not None else [],
+            "numeric_columns": (
+                [c for c in self.df.columns if self.is_numeric(c)]
+                if self.df is not None else []
+            ),
             "categories": self.categories,
             "defined_scales": self.defined_scales,
             "ignored_columns": list(self.cleaning_rules.get("ignored_columns", [])),

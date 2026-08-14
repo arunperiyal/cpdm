@@ -158,141 +158,6 @@ function submitValueCleaning() {
         .catch(reportError);
 }
 
-/* --- quick text trimmer (values only) -------------------------------- */
-
-function openTextTrimmer() {
-    withDataset(() => {
-        document.getElementById('clean-modal-header').innerText = 'Clean -> Language & Text Trimming Tool';
-        document.getElementById('clean-modal-body').innerHTML = `
-            <div class="hint-box">
-                <strong>Automatic Text Scrubber</strong>
-                <span>Choose how to trim or remove non-English / non-Latin characters across all active columns.</span>
-            </div>
-            <div class="rule-card">
-                <label>
-                    <input type="radio" name="scrub_mode" value="non_english_to_end" checked>
-                    <strong style="display:inline;">Remove from the first non-English character to the end</strong>
-                    <div class="muted">e.g. "WhatsApp (&#3381;&#3390;&#3377;&#3405;&#3377;&#3390;&#3370;&#3405;&#3370;&#3405;)" -&gt; "WhatsApp ("</div>
-                </label>
-                <label>
-                    <input type="radio" name="scrub_mode" value="delimiter_to_end">
-                    <strong style="display:inline;">Remove after a specific character / delimiter</strong>
-                    <div class="muted" style="margin-bottom:6px;">Cuts the text at the character you enter (e.g. / - ( ,)</div>
-                    <input type="text" id="scrub-delimiter" placeholder="e.g. / or - or (" style="width:200px; font-size:12px;">
-                </label>
-                <label style="margin-bottom:0;">
-                    <input type="radio" name="scrub_mode" value="strip_non_english">
-                    <strong style="display:inline;">Strip all non-English characters entirely</strong>
-                    <div class="muted">Removes non-ASCII scripts anywhere in the string, keeping English words and punctuation.</div>
-                </label>
-            </div>`;
-
-        document.getElementById('clean-modal-footer').innerHTML = `
-            <button class="btn btn-secondary" onclick="closeModal('modal-clean')">Cancel</button>
-            <button class="btn btn-primary" onclick="submitTextTrimming()">Apply Text Trimming</button>`;
-
-        openModal('modal-clean');
-    });
-}
-
-function submitTextTrimming() {
-    const mode = document.querySelector('input[name="scrub_mode"]:checked').value;
-    const delimiter = document.getElementById('scrub-delimiter')?.value || '';
-
-    if (mode === 'delimiter_to_end' && !delimiter) {
-        logError('Please enter a character/delimiter for the delimiter rule.');
-        return;
-    }
-
-    apiPost('/api/clean_text_pattern', { mode, delimiter })
-        .then(data => {
-            log(`[SUCCESS] Text trimming applied across ${data.columns_processed} active column(s).`, 'success');
-            startCleaningWizard();  // reload step 1 so the cleaned text is visible
-        })
-        .catch(reportError);
-}
-
-/* --- Clean -> Remove Non-English (headers + values + exemptions) ------ */
-
-function ruleOptions(group, delimiterId) {
-    return `
-        <label><input type="radio" name="${group}" value="none" checked> Do not modify</label>
-        <label><input type="radio" name="${group}" value="non_english_to_end"> Remove from 1st non-English character to the end</label>
-        <label><input type="radio" name="${group}" value="strip_non_english"> Strip all non-English characters entirely</label>
-        <label style="display:flex; align-items:center; gap:8px; margin-bottom:0;">
-            <input type="radio" name="${group}" value="delimiter_to_end"> Remove after character/delimiter:
-            <input type="text" id="${delimiterId}" placeholder="e.g. / or -" style="width:80px; font-size:11px;">
-        </label>`;
-}
-
-function openRemoveNonEnglishModal() {
-    withDataset(state => {
-        document.getElementById('clean-modal-header').innerText = 'Clean -> Remove Non-English / Text Trimmer';
-
-        const colsHtml = state.cols.map(col => {
-            const safe = escapeHtml(col);
-            return `
-                <label style="display:flex; align-items:center; gap:6px; font-size:11px; color:#cdd6f4; background:#11111b; padding:4px 8px; border-radius:4px; border:1px solid #313244;">
-                    <input type="checkbox" class="exempt-col-chk" value="${safe}">
-                    <span>${safe}</span>
-                </label>`;
-        }).join('');
-
-        document.getElementById('clean-modal-body').innerHTML = `
-            <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                <div style="flex:1.2; min-width:320px; display:flex; flex-direction:column; gap:15px;">
-                    <div class="rule-card">
-                        <strong style="color:#89b4fa;">1. Column Headers Rule</strong>
-                        ${ruleOptions('header_mode', 'hdr-delimiter')}
-                    </div>
-                    <div class="rule-card">
-                        <strong style="color:#a6e3a1;">2. Cell Values Rule</strong>
-                        ${ruleOptions('value_mode', 'val-delimiter')}
-                    </div>
-                </div>
-                <div class="rule-card" style="flex:1; min-width:240px; display:flex; flex-direction:column;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <strong style="color:#f38ba8; margin:0;">3. Exempt Columns</strong>
-                        <span class="muted">Checked = skip cleaning</span>
-                    </div>
-                    <div style="flex:1; max-height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding-right:4px;">
-                        ${colsHtml}
-                    </div>
-                </div>
-            </div>`;
-
-        document.getElementById('clean-modal-footer').innerHTML = `
-            <button class="btn btn-secondary" onclick="closeModal('modal-clean')">Cancel</button>
-            <button class="btn btn-primary" onclick="submitRemoveNonEnglish()">Execute Cleaning Rules</button>`;
-
-        openModal('modal-clean');
-    });
-}
-
-function submitRemoveNonEnglish() {
-    const headerMode = document.querySelector('input[name="header_mode"]:checked').value;
-    const valueMode = document.querySelector('input[name="value_mode"]:checked').value;
-
-    if (headerMode === 'none' && valueMode === 'none') {
-        logError('Select at least one cleaning rule for headers or values.');
-        return;
-    }
-
-    const exemptCols = Array.from(document.querySelectorAll('.exempt-col-chk:checked')).map(c => c.value);
-
-    apiPost('/api/remove_non_english_advanced', {
-        header_cfg: { mode: headerMode, delimiter: document.getElementById('hdr-delimiter')?.value || '' },
-        value_cfg: { mode: valueMode, delimiter: document.getElementById('val-delimiter')?.value || '' },
-        exempt_cols: exemptCols
-    })
-        .then(data => {
-            const res = data.result;
-            log(`[SUCCESS] Advanced cleaning applied! Modified ${res.headers_changed} header(s) and cleaned cell values across ${res.columns_cleaned} column(s) (exempted ${res.exempt_columns_count}).`, 'success');
-            closeModal('modal-clean');
-        })
-        .catch(reportError);
-}
-
 /* --- cleaning recipes ------------------------------------------------- */
 
 function exportCleaningRules() {
@@ -317,7 +182,10 @@ function applyCleaningRulesFile() {
     apiUpload('/api/apply_cleaning_rules_file', file)
         .then(data => {
             const res = data.result;
-            log(`[SUCCESS] Rules applied! Mapped ${res.headers_changed} header(s), ignored ${res.ignored_columns_count} column(s), and applied replacements from ${res.columns_replaced} entry group(s).`, 'success');
+            log(res.version === 2
+                ? `[SUCCESS] Recipe replayed: ${res.steps_applied} step(s), ${res.text_rule_steps} of them text rules — ${res.headers_changed} header(s) and ${res.cells_changed} cell(s) changed.`
+                : `[SUCCESS] Rules applied! Mapped ${res.headers_changed} header(s), ignored ${res.ignored_columns_count} column(s), and applied replacements from ${res.columns_replaced} entry group(s).`,
+                'success');
             refreshStatus();
         })
         .catch(reportError)

@@ -13,7 +13,7 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from cpdm import create_app  # noqa: E402
-from cpdm.core import state  # noqa: E402
+from cpdm.core import state, text_rules  # noqa: E402
 from cpdm.core.markdown_lite import _fallback_render  # noqa: E402
 from cpdm.paths import PROJECT_ROOT  # noqa: E402
 
@@ -181,6 +181,161 @@ def test_docs_and_samples_are_served():
     workspace = client.get("/")
     assert workspace.status_code == 200
     assert b"Documentation Browser" in workspace.data
+
+
+def test_text_rule_chain_applies_in_order():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    result = client.post(
+        "/api/text_rules/apply",
+        json={
+            "stage": "headers",
+            "rules": [
+                {"mode": "delimiter", "delimiters": ["/", "("], "keep": "before"},
+                {"mode": "tidy"},
+            ],
+        },
+    ).get_json()["result"]
+
+    # every header but Timestamp carries a ' / <translation>' tail
+    assert result["headers_changed"] == 16
+    assert "Name" in state.session.df.columns
+    assert "Do you use social media daily?" in state.session.df.columns
+    assert "Timestamp" in state.session.df.columns
+    assert "Cut at '/' '('" in result["description"]
+
+
+def test_delimiter_keep_after_and_script_awareness():
+    chain = [{"mode": "delimiter", "delimiters": ["/"], "keep": "after"}]
+    rules = text_rules.normalise_chain(chain)
+    assert text_rules.apply_chain("പേര് / Name", rules) == "Name"
+
+    keep_accents = text_rules.normalise_chain([{"mode": "strip_non_english"}])
+    assert text_rules.apply_chain("café ₹500 — naïve", keep_accents) == "café ₹500 — naïve"
+    assert text_rules.apply_chain("café വാട്സ്", keep_accents) == "café"
+
+    strict = text_rules.normalise_chain([{"mode": "strip_non_english", "strict_ascii": True}])
+    assert text_rules.apply_chain("café ₹500", strict) == "caf 500"
+
+
+def test_tidy_clears_the_debris_a_cut_leaves():
+    rules = text_rules.normalise_chain(
+        [{"mode": "non_english_to_end"}, {"mode": "tidy"}]
+    )
+    assert text_rules.apply_chain("WhatsApp (വാട്സാപ്പ്)", rules) == "WhatsApp"
+    assert text_rules.apply_chain("Age - വയസ്സ്", rules) == "Age"
+    assert text_rules.apply_chain("Q1. Are you well?", rules) == "Q1. Are you well?"
+
+
+def test_preview_matches_apply_and_never_mutates():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    before_state = client.get("/api/get_state").get_json()
+    body = {
+        "stage": "headers",
+        "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                  {"mode": "tidy"}],
+    }
+
+    preview = client.post("/api/text_rules/preview", json=body).get_json()
+    assert preview["columns_affected"] == 16
+    assert client.get("/api/get_state").get_json() == before_state  # untouched
+
+    client.post("/api/text_rules/apply", json=body)
+    after = list(state.session.df.columns)
+    assert [row["after"] for row in preview["rows"]] == after
+
+
+def test_preview_warns_about_collisions_and_emptied_headers():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    # two headers that will collapse onto the same name once cut at '/'
+    client.post("/api/clean_headers", json={"header_map": {
+        "Age / വയസ്സ്": "Dup / a",
+        "District / ജില്ല": "Dup / b",
+    }})
+
+    rows = {row["column"]: row for row in client.post(
+        "/api/text_rules/preview",
+        json={"stage": "headers",
+              "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"}]},
+    ).get_json()["rows"]}
+
+    assert rows["Dup / a"]["after"] == "Dup"
+    assert rows["Dup / b"]["after"] == "Dup_1"
+    assert "already taken" in rows["Dup / b"]["warning"]
+
+    # a rule that would wipe a header out entirely keeps the original instead
+    emptied = {row["column"]: row for row in client.post(
+        "/api/text_rules/preview",
+        json={"stage": "headers",
+              "rules": [{"mode": "delimiter", "delimiters": ["T"], "keep": "before"}]},
+    ).get_json()["rows"]}
+
+    assert emptied["Timestamp"]["after"] == "Timestamp"
+    assert "empty this header" in emptied["Timestamp"]["warning"]
+
+
+def test_values_preview_counts_and_examples():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    preview = client.post(
+        "/api/text_rules/preview",
+        json={"stage": "values",
+              "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                        {"mode": "tidy"}],
+              "columns": ["Gender / ലിംഗം"]},
+    ).get_json()
+
+    assert preview["columns_scanned"] == 1
+    row = preview["rows"][0]
+    assert row["cells_changed"] == row["cells_total"] == 30
+    assert {example["after"] for example in row["examples"]} == {"Male", "Female"}
+
+
+def test_recipe_v2_records_and_replays_text_rules():
+    client = fresh_client()
+    upload(client, "sample_survey.xlsx")
+
+    trim = {"stage": "headers",
+            "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                      {"mode": "tidy"}]}
+    comments = "Any other comments?"   # what the trimmed header becomes
+    client.post("/api/text_rules/apply", json=trim)
+    client.post("/api/clean_headers",
+                json={"header_map": {"Gender": "sex"}, "ignored_cols": [comments]})
+    client.post("/api/text_rules/apply",
+                json={"stage": "values",
+                      "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                                {"mode": "tidy"}]})
+
+    exported = client.get("/api/export_cleaning_rules")
+    recipe = json.loads(exported.data.decode("utf-8"))
+    assert recipe["version"] == 2
+    assert [step["op"] for step in recipe["steps"]] == [
+        "text_rules", "header_map", "text_rules"
+    ]
+
+    # replay onto wave 2 and expect the same names *and* the same trimmed values
+    wave1_cols = list(state.session.df.columns)
+    wave1_gender = set(state.session.df["sex"])
+
+    upload(client, "sample_survey_wave2.csv")
+    replay = client.post(
+        "/api/apply_cleaning_rules_file",
+        data={"file": (io.BytesIO(exported.data), "cleaning_rules.json")},
+        content_type="multipart/form-data",
+    ).get_json()["result"]
+
+    assert replay["version"] == 2 and replay["steps_applied"] == 3
+    assert list(state.session.df.columns) == wave1_cols
+    assert set(state.session.df["sex"]) <= wave1_gender
+    # the ignored column keeps its original text through the value stage
+    assert state.session.df[comments].astype(str).str.contains("[^\x00-\x7F]").any()
 
 
 def test_markdown_fallback_renderer():

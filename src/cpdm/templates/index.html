@@ -24,7 +24,7 @@
             <button class="nav-btn">Clean</button>
             <div class="dropdown">
                 <div class="dropdown-item" onclick="startCleaningWizard()">Header Mapping &amp; Value Replacement</div>
-                <div class="dropdown-item" onclick="openRemoveNonEnglishModal()">Remove Non-English</div>
+                <div class="dropdown-item" onclick="openTextRulesWizard()">Remove Non-English / Trim Text</div>
                 <div class="dropdown-item" onclick="exportCleaningRules()">Save Cleaning File (.json)</div>
                 <div class="dropdown-item" onclick="triggerRulesFileSelect()">Apply Cleaning File (.json)</div>
             </div>
@@ -210,6 +210,7 @@
     <script src="{{ url_for('static', filename='js/core.js') }}"></script>
     <script src="{{ url_for('static', filename='js/files.js') }}"></script>
     <script src="{{ url_for('static', filename='js/cleaning.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/text_rules.js') }}"></script>
     <script src="{{ url_for('static', filename='js/scales.js') }}"></script>
     <script src="{{ url_for('static', filename='js/compute.js') }}"></script>
     <script src="{{ url_for('static', filename='js/console.js') }}"></script>

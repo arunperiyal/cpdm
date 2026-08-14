@@ -40,6 +40,7 @@ The same goes for identifiers. An ID that gets caught by a replacement rule stop
 
 A cleaning error found immediately costs a minute. The same error found after scoring costs the whole session, because there is no way back. After each step, look:
 
+- the **Preview** in the trimming wizard, *before* applying — the one check that costs nothing at all, because nothing has changed yet;
 - `columns` after renaming — are the names what you intended?
 - `show` after replacing — did the values change in the columns you meant?
 - `summary` after scoring — are the minima and maxima inside the response range?

@@ -58,25 +58,35 @@ Only the first sheet of a workbook is read.
    Values already mapped are hidden on later passes. Numeric columns, numbers stored as
    text, blanks and `nan`/`none`/`null` are skipped.
 
-**Remove Non-English** — independent rules for headers and for cell values, plus a
-per-column exemption list. Each rule can be:
+**Remove Non-English / Trim Text** — a two-stage wizard: stage 1 cleans the header row,
+stage 2 cleans the cell values. Each stage takes an **ordered chain of rules** plus the
+columns to apply them to, and previews the result before anything is written.
 
-- *Do not modify*
-- *Remove from the first non-English (non-ASCII) character to the end* — `WhatsApp (വാട്സാപ്പ്)` → `WhatsApp (`
-- *Strip all non-English characters entirely* — keeps printable ASCII, collapses leftover whitespace
-- *Remove after a chosen delimiter to the end* — cut at `/`, `-`, `(`, `,` or any character you type
+- *Cut from the first non-English character to the end* — `WhatsApp (വാട്സാപ്പ്)` → `WhatsApp (`
+- *Cut at a delimiter* — several delimiters at once (`/ ( -`), cutting at whichever comes first, keeping the text **before** or **after** it
+- *Strip non-English characters* — removes them wherever they appear
+- *Tidy up leftovers* — drops dangling brackets and separators, removes empty `()`, collapses spaces: `WhatsApp (` → `WhatsApp`
 
-Exempt columns are untouched by both rules; numeric columns are never value-cleaned;
-header renames are de-duplicated (`Name`, `Name_1`, …) if trimming would collide. The
-same three modes are reachable as a quick value-only trimmer from inside step 1 of the
-wizard.
+"Non-English" means outside the Latin script and ordinary punctuation, so `café`, `₹500`,
+dashes and curly quotes survive; a per-rule **strict ASCII** toggle restores the older
+behaviour that removed those too.
 
-**Save Cleaning File (.json)** — exports the recorded recipe (`header_map`,
-`value_replacements`, `ignored_columns`) as `cleaning_rules.json`.
+The column picker has search, all/none and shift-click range selection; numeric columns
+are excluded from the values stage automatically. **Preview** lists every header as
+before → after — warning about collisions (`Name` → `Name_1`) and about rules that would
+empty a header — or, for values, the changed-cell count per column with up to five
+examples. The ⚡ button inside the header-mapping wizard opens the same wizard at its
+values stage.
 
-**Apply Cleaning File (.json)** — replays a saved recipe against the loaded dataset:
-renames headers, restores the ignored-column list, re-applies value replacements. This is
-how a second wave of the same survey gets cleaned identically to the first.
+**Save Cleaning File (.json)** — exports the recorded recipe as `cleaning_rules.json`:
+an ordered `steps` log (text rules, header maps, value replacements) plus the flat
+`header_map` / `value_replacements` / `ignored_columns` keys for readability.
+
+**Apply Cleaning File (.json)** — replays a saved recipe against the loaded dataset, step
+by step in the order they were performed, so trimming, renaming and coding all reproduce.
+This is how a second wave of the same survey gets cleaned identically to the first.
+Version 1 recipes — the older flat format, including `samples/sample_cleaning_rules.json`
+— still replay through the original code path.
 
 ### Fields
 
@@ -164,8 +174,8 @@ Regenerate them with `python samples/generate_samples.py` (synthetic, fixed seed
 - **Single session, in-memory.** One dataset is held in a module-level object shared by
   all requests; there is no multi-user isolation, no persistence, and no undo. Restarting
   the server discards the working data. Export before you quit.
-- **Cleaning recipes record renames and replacements only** — Remove Non-English value
-  rules, scoring, numerise and computed columns are not part of the exported `.json`.
+- **Cleaning recipes record text rules, renames and replacements** — scoring, numerise and
+  computed columns are still not part of the exported `.json`.
 - **Text replacement is substring-based**, not whole-cell: mapping `Yes` → `1` also
   rewrites `Yes, always`. Use the ignore and exempt lists to protect free text.
 - Not yet implemented from the original project outline: **form creation**, **data
@@ -188,7 +198,7 @@ src/cpdm/
         dataset.py           Dataset: the working table, categories, scales, recipe
         state.py             The process-wide session object
         tabular_io.py        Reading and writing .xlsx / .csv
-        text_rules.py        The four shared text-trimming modes
+        text_rules.py        Trimming rules: the chain model and its modes
         cleaning.py          Header mapping, value replacement, trimming
         recipes.py           Saving and replaying cleaning recipes
         scales.py            Scale definitions, categories, numerise, scoring
@@ -203,7 +213,8 @@ src/cpdm/
                              console, docs (+ support.py for error handling)
     templates/               index.html (workspace), docs.html (reader)
     static/css/              style.css, docs.css
-    static/js/               core, files, cleaning, scales, compute, console, docs
+    static/js/               core, files, cleaning, text_rules (the trimming
+                             wizard), scales, compute, console, docs
 ```
 
 Core modules take a `Dataset` as their first argument and never import Flask, so they can
@@ -223,8 +234,10 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `POST` | `/api/clean_headers` | Apply header map + ignored-column list |
 | `POST` | `/api/get_unique_values` | Unmapped unique text values and where they occur |
 | `POST` | `/api/clean_values` | Apply global value replacements |
-| `POST` | `/api/clean_text_pattern` | Trim/strip text across active columns |
-| `POST` | `/api/remove_non_english_advanced` | Header + value rules with exemptions |
+| `POST` | `/api/text_rules/preview` | What a rule chain would do (never mutates) |
+| `POST` | `/api/text_rules/apply` | Run a rule chain over headers or values |
+| `POST` | `/api/clean_text_pattern` | Adapter: one value rule (pre-wizard API) |
+| `POST` | `/api/remove_non_english_advanced` | Adapter: one header + one value rule |
 | `GET` | `/api/export_cleaning_rules` | Download `cleaning_rules.json` |
 | `POST` | `/api/apply_cleaning_rules_file` | Replay a saved recipe |
 | `POST` | `/api/create_scale`, `/api/delete_scale` | Manage scale definitions |
@@ -241,10 +254,12 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Eight end-to-end tests drive the HTTP API with the bundled samples: the full clean →
-categorise → score → compute → export path, CSV upload, recipe replay, replacement
-ordering, exemptions, console commands, docs/sample serving, and the Markdown fallback
-renderer.
+Fifteen end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+categorise → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
+replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
+fallback renderer, and the trimming wizard — rule chains, delimiter sides, script
+awareness, tidying, collision warnings, and the guarantee that a preview leaves the
+dataset untouched.
 
 ---
 

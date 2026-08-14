@@ -60,6 +60,8 @@ table.data-table th { background-color: #313244; color: #89b4fa; }
     padding: 22px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
 }
+.modal-content.modal-tall { max-height: 92vh; height: 92vh; }
+.modal-content.modal-tall .modal-body { max-height: none; }
 .modal-header { font-size: 18px; font-weight: bold; color: #89b4fa; margin-bottom: 15px; }
 .modal-body { flex: 1; overflow-y: auto; margin-bottom: 15px; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; align-items: center; }
@@ -106,7 +108,7 @@ select, input[type="text"], input[type="number"] { background: #11111b; border: 
 .rule-actions .btn { padding: 2px 7px; font-size: 11px; line-height: 1.3; }
 
 .trimmer-cols {
-    max-height: 240px; overflow-y: auto; display: flex; flex-direction: column;
+    max-height: 38vh; overflow-y: auto; display: flex; flex-direction: column;
     gap: 3px; padding-right: 4px;
 }
 .col-pick {
@@ -128,6 +130,17 @@ select, input[type="text"], input[type="number"] { background: #11111b; border: 
     background: #11111b; border: 1px solid #45475a; border-bottom-width: 2px;
     border-radius: 3px; padding: 1px 5px; margin-right: 3px;
 }
+.group-chip { cursor: pointer; user-select: none; border-color: #45475a; }
+.group-chip:hover { border-color: #89b4fa; }
+.group-chip.chip-all { background: rgba(166, 227, 161, 0.16); color: #a6e3a1; border-color: #a6e3a1; }
+.group-chip.chip-some { background: rgba(249, 226, 175, 0.14); color: #f9e2af; border-color: #f9e2af; }
+.group-chip.chip-empty { opacity: 0.45; }
+.group-prompt {
+    display: flex; gap: 12px; align-items: center; font-size: 12px; color: #cdd6f4;
+    background: rgba(249, 226, 175, 0.08); border: 1px solid #f9e2af;
+    border-radius: 4px; padding: 8px 10px;
+}
+
 .trimmer-status { min-height: 18px; font-size: 12px; margin-bottom: 10px; }
 .trimmer-status .log-success { color: #a6e3a1; }
 .trimmer-status .log-error { color: #f38ba8; }

@@ -29,10 +29,25 @@ const trimmer = {
     preview: null,
     showUnchanged: false,
     leftovers: null,    // stage 3: what the rules could not catch
-    fixes: { headers: {}, values: {} }
+    fixes: { headers: {}, values: {} },
+    groups: []          // stage 2 targets whole groups rather than loose columns
 };
 
 /* --- entry points ----------------------------------------------------- */
+
+function trimmerLoadGroups() {
+    return apiGet('/api/groups')
+        .then(data => {
+            const flat = [];
+            const walk = (nodes, depth) => nodes.forEach(node => {
+                flat.push({ name: node.name, depth, columns: node.columns });
+                walk(node.children, depth + 1);
+            });
+            walk(data.groups, 0);
+            trimmer.groups = flat;
+        })
+        .catch(() => { trimmer.groups = []; });
+}
 
 function openTextRulesWizard(stage = 'headers') {
     withDataset(state => {
@@ -43,8 +58,10 @@ function openTextRulesWizard(stage = 'headers') {
         trimmer.stage = stage;
         trimmer.preview = null;
         trimmer.anchor = null;
-        renderTrimmer();
-        openModal('modal-clean');
+        trimmerLoadGroups().then(() => {
+            renderTrimmer();
+            openModal('modal-clean');
+        });
     });
 }
 
@@ -152,6 +169,7 @@ function trimmerToggleColumn(index, event) {
     trimmer.anchor = index;
     trimmer.preview = null;
     renderTrimmerColumns();
+    renderTrimmerGroups();
 }
 
 function trimmerSelectAll(all) {
@@ -159,6 +177,7 @@ function trimmerSelectAll(all) {
     trimmer.visible.forEach(col => { if (all) selection.add(col); else selection.delete(col); });
     trimmer.preview = null;
     renderTrimmerColumns();
+    renderTrimmerGroups();
 }
 
 /* --- keyboard ----------------------------------------------------------- */
@@ -174,10 +193,70 @@ const trimmerListCtrl = {
         if (on) selection.add(name); else selection.delete(name);
         trimmer.preview = null;
     },
-    redraw: () => renderTrimmerColumns()
+    redraw: () => { renderTrimmerColumns(); renderTrimmerGroups(); }
 };
 
 function trimmerListKeys(event) { columnListKeys(event, trimmerListCtrl); }
+
+/* --- targeting whole groups (stage 2) ----------------------------------- */
+
+function trimmerGroupState(group) {
+    const selection = trimmerSelection();
+    const usable = group.columns.filter(col => !trimmer.numeric.has(col));
+    if (!usable.length) return 'empty';
+    const taken = usable.filter(col => selection.has(col)).length;
+    if (taken === usable.length) return 'all';
+    return taken ? 'some' : 'none';
+}
+
+function trimmerToggleGroup(index) {
+    const group = trimmer.groups[index];
+    const selection = trimmerSelection();
+    const on = trimmerGroupState(group) !== 'all';
+
+    group.columns.forEach(col => {
+        if (trimmer.numeric.has(col)) return;
+        if (on) selection.add(col); else selection.delete(col);
+    });
+    trimmer.preview = null;
+    renderTrimmerColumns();
+    renderTrimmerGroups();
+}
+
+function trimmerGroupsOnly(index) {
+    trimmerSelection().clear();
+    trimmerToggleGroup(index);
+}
+
+function renderTrimmerGroups() {
+    const box = document.getElementById('trimmer-groups');
+    if (!box) return;
+
+    if (!trimmer.groups.length) {
+        box.innerHTML = `
+            <div class="group-prompt">
+                <span>Cleaning values usually differs by construct — the item columns want
+                one rule, free text another. <strong>Group your columns first</strong> and you
+                can aim this stage a group at a time.</span>
+                <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; white-space:nowrap;"
+                        onclick="closeModal('modal-clean'); openGroupsModal();">Open Fields &#8594; Groups</button>
+            </div>`;
+        return;
+    }
+
+    box.innerHTML = `
+        <div class="muted" style="margin-bottom:5px;">Target a group (click to toggle, double-click for only that one):</div>
+        <div class="chip-list">${trimmer.groups.map((group, index) => {
+            const state = trimmerGroupState(group);
+            const indent = '&nbsp;'.repeat(group.depth * 2);
+            return `<span class="chip group-chip chip-${state}"
+                          title="${escapeHtml(group.columns.join(', '))}"
+                          onclick="trimmerToggleGroup(${index})"
+                          ondblclick="trimmerGroupsOnly(${index})">
+                        ${indent}${escapeHtml(group.name)} (${group.columns.length})
+                    </span>`;
+        }).join('')}</div>`;
+}
 function trimmerSearchKeys(event) { columnSearchKeys(event, trimmerListCtrl); }
 
 /* --- shortcuts ---------------------------------------------------------- */
@@ -232,17 +311,18 @@ function renderTrimmer() {
                         <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="trimmerSelectAll(false)">None</button>
                     </span>
                 </div>
+                ${isHeaders ? '' : '<div id="trimmer-groups" style="margin-top:8px;"></div>'}
                 <input type="text" id="trimmer-search" placeholder="Search columns..."
                        style="width:100%; margin:8px 0; font-size:12px;"
                        oninput="renderTrimmerColumns()" onkeydown="trimmerSearchKeys(event)">
                 <div id="trimmer-columns" class="trimmer-cols" onkeydown="trimmerListKeys(event)"></div>
-                <div class="muted" style="margin-top:6px;">${COLUMN_LIST_HINT} Shift-click works too.</div>
             </div>
         </div>
 
         <div id="trimmer-preview"></div>`;
 
     renderTrimmerRules();
+    renderTrimmerGroups();
     renderTrimmerColumns();
     renderTrimmerPreview();
     renderTrimmerFooter();
@@ -360,11 +440,15 @@ function renderTrimmerPreview() {
     let summary;
     let body;
 
+    const nothing = !preview.columns_affected
+        ? '<div class="diff-warn" style="margin-bottom:8px;">Nothing changes — these rules may already have been applied.</div>'
+        : '';
+
     if (preview.stage === 'headers') {
         summary = `${preview.columns_affected} of ${preview.columns_scanned} header(s) change`;
         body = rows.length ? `
             <table class="preview-table">
-                <thead><tr><th>Before</th><th>After</th><th>Note</th></tr></thead>
+                <thead><tr><th>Now</th><th>After these rules</th><th>Note</th></tr></thead>
                 <tbody>${rows.map(row => `
                     <tr>
                         <td class="diff-before">${escapeHtml(row.before)}</td>
@@ -382,6 +466,7 @@ function renderTrimmerPreview() {
                     <span class="muted">${row.cells_changed} of ${row.cells_total} cell(s)</span>
                 </div>
                 <table class="preview-table">
+                    <thead><tr><th>Now</th><th></th><th>After these rules</th></tr></thead>
                     <tbody>${row.examples.map(example => `
                         <tr>
                             <td class="diff-before">${escapeHtml(example.before)}</td>
@@ -397,10 +482,11 @@ function renderTrimmerPreview() {
             <div class="preview-head">
                 <div>
                     <strong style="color:#a6e3a1;">Preview — ${escapeHtml(preview.description)}</strong>
-                    <div class="muted">${summary}</div>
+                    <div class="muted">${summary}. <em>Now</em> is the data as it stands, not as the file arrived.</div>
                 </div>
                 ${toggle}
             </div>
+            ${nothing}
             ${body}
         </div>`;
 }
@@ -431,8 +517,7 @@ function trimmerGoToStage(stage) {
         trimmer.anchor = null;
 
         if (stage === 'leftovers') return loadTrimmerLeftovers();
-        renderTrimmer();
-        return null;
+        return trimmerLoadGroups().then(renderTrimmer);
     }).catch(reportError);
 }
 

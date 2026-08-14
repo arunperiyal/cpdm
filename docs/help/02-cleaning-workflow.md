@@ -27,7 +27,11 @@ Add as many as you need with **+ Add rule**; they run top to bottom, and the arr
 
 The right-hand list picks which columns the stage touches. Columns already marked ignored in the header-mapping wizard start unticked; in the values stage, numeric columns are greyed out because they hold no text to trim.
 
-It is quicker from the keyboard, and the dialogue opens with the search box focused:
+**Stage 2 aims by group.** Cleaning values usually differs by construct — the item columns want one rule, the free-text answers another — so the values stage shows your [field groups](/docs/help/field-groups) as chips above the list. Click one to take or drop its columns, double-click to take only that group; a chip is green when the whole group is selected and amber when part of it is.
+
+If you have no groups yet the stage says so and offers a button to go and make them. The natural order is: clean the headers in stage 1, apply, group the columns now that their names are readable, then come back — Clean → Remove Non-English → **Continue** lands you on stage 2 with the chips filled in.
+
+The list is quicker from the keyboard, and the dialogue opens with the search box focused. The keys are listed across the top of the dialogue:
 
 | Key | In the search box | In the list |
 | --- | --- | --- |
@@ -55,6 +59,7 @@ So `WB` then Enter selects the five wellbeing items and nothing else. Shift-clic
 | Button | What it does |
 | --- | --- |
 | **Preview** | Shows the result without changing anything, and reports the count in the status line under the shortcuts. |
+| | The table compares **Now** — the data as it currently stands — with **After these rules**. After an Apply, *Now* is the applied text, so previewing the same rules a second time correctly reports that nothing more would change. |
 | **Apply** | Runs the rules and stays on this stage, so you can follow one chain with another — cut at `/`, apply, then strip what is left, apply again. |
 | **Continue →** | Moves to the next stage. It does not apply anything, so preview and apply first if you meant to. |
 | **← Back** | Returns to the previous stage. |

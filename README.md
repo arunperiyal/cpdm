@@ -73,14 +73,20 @@ on the stage so one chain can follow another.
 dashes and curly quotes survive; a per-rule **strict ASCII** toggle restores the older
 behaviour that removed those too.
 
-The column picker is keyboard-driven: it opens focused on the search box, **Enter** takes
-every column matching the filter (**Shift+Enter** drops them), **↓** moves into the list,
-**Space** ticks, **Shift+Space** extends, **Ctrl+A** takes everything listed and **Esc**
-clears the filter. Shift-click still works, and the same keys drive the Fields → Groups
-picker. Numeric columns are excluded from the values stage automatically. **Preview** lists every header as
-before → after — warning about collisions (`Name` → `Name_1`) and about rules that would
-empty a header — or, for values, the changed-cell count per column with up to five
-examples, with the count echoed in a status line beside the buttons.
+The column picker is keyboard-driven, with the keys listed across the top of the dialogue:
+it opens focused on the search box, **Enter** takes every column matching the filter
+(**Shift+Enter** drops them), **↓** moves into the list, **Space** ticks, **Shift+Space**
+extends, **Ctrl+A** takes everything listed and **Esc** clears the filter. Shift-click
+still works, and the same keys drive the Fields → Groups picker. Numeric columns are
+excluded from the values stage automatically.
+
+**Stage 2 aims by group**: your field groups appear as chips above the column list — click
+to take or drop a group, double-click for only that one — since values usually need
+different rules per construct. With no groups yet, the stage says so and points at
+Fields → Groups. **Preview** compares **Now** — the data as it stands, not as the file arrived — with
+**After these rules**: every header, warning about collisions (`Name` → `Name_1`) and
+about rules that would empty a header, or for values the changed-cell count per column
+with up to five examples. The count is echoed in a status line beside the buttons.
 
 **Stage 3** lists every header and distinct value that still holds a non-English character
 — the free-text answer in another script, the header nobody standardised — with the

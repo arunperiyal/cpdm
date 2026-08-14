@@ -319,6 +319,127 @@ def preview_text_rules(dataset, stage, rules, columns=None):
     }
 
 
+# --- leftovers: what the rules could not catch -----------------------------
+MAX_LEFTOVER_VALUES = 300
+
+
+def find_leftovers(dataset, columns=None, strict_ascii=False):
+    """Headers and cell values that still hold non-English characters.
+
+    A rule chain handles the regular cases; whatever is left is usually a
+    handful of oddities worth fixing by hand, which is what stage 3 is for.
+    """
+    dataset.require_df()
+    targets = target_columns(dataset, STAGE_VALUES, columns)
+
+    headers = []
+    for col in dataset.df.columns:
+        marks = text_rules.non_english_chars(str(col), strict_ascii)
+        if marks:
+            headers.append({"column": str(col), "marks": marks})
+
+    found = {}
+    truncated = False
+    for col in targets:
+        for value in dataset.df[col].dropna():
+            text = str(value).strip()
+            if not text or text in found:
+                if text in found:
+                    found[text]["count"] += 1
+                    found[text]["columns"].add(col)
+                continue
+            if not text_rules.non_english_chars(text, strict_ascii):
+                continue
+            if len(found) >= MAX_LEFTOVER_VALUES:
+                truncated = True
+                break
+            found[text] = {
+                "count": 1,
+                "columns": {col},
+                "marks": text_rules.non_english_chars(text, strict_ascii),
+            }
+        if truncated:
+            break
+
+    values = [
+        {
+            "value": text,
+            "count": entry["count"],
+            "columns": sorted(entry["columns"]),
+            "marks": entry["marks"],
+        }
+        for text, entry in sorted(found.items())
+    ]
+
+    return {
+        "headers": headers,
+        "values": values,
+        "columns_scanned": len(targets),
+        "truncated": truncated,
+    }
+
+
+def replace_whole_cells(dataset, replacements, columns=None):
+    """Replace cells that match a value exactly, not as a substring.
+
+    This is the manual counterpart to the value-replacement wizard: it touches
+    only cells that hold precisely the value given, so a fix for one stray
+    answer cannot bleed into a longer one that contains it.
+    """
+    dataset.require_df()
+
+    mapping = {
+        str(old).strip(): str(new)
+        for old, new in (replacements or {}).items()
+        if str(old).strip() and str(old).strip() != str(new)
+    }
+    if not mapping:
+        return {"cells_changed": 0, "columns_changed": 0}
+
+    targets = target_columns(dataset, STAGE_VALUES, columns)
+    cells = 0
+    touched = 0
+
+    for col in targets:
+        series = dataset.df[col]
+        stripped = series.apply(lambda v: None if pd.isna(v) else str(v).strip())
+        mask = stripped.isin(mapping.keys())
+        hits = int(mask.sum())
+        if not hits:
+            continue
+        updated = series.astype(object).copy()
+        updated[mask] = stripped[mask].map(mapping)
+        dataset.df[col] = updated
+        cells += hits
+        touched += 1
+
+    dataset.record_step("exact_values", map=mapping,
+                        columns=list(columns) if columns is not None else None)
+    return {"cells_changed": cells, "columns_changed": touched}
+
+
+def fix_leftovers(dataset, headers=None, values=None, columns=None):
+    """Apply hand-written fixes to the headers and values stage 3 listed."""
+    dataset.require_df()
+
+    renamed = 0
+    if headers:
+        wanted = {old: new for old, new in headers.items() if new and new != old}
+        if wanted:
+            before = list(dataset.df.columns)
+            update_headers(dataset, wanted)
+            renamed = sum(1 for old, new in zip(before, dataset.df.columns) if old != new)
+
+    replaced = replace_whole_cells(dataset, values, columns) if values else {
+        "cells_changed": 0, "columns_changed": 0}
+
+    return {
+        "headers_renamed": renamed,
+        "cells_changed": replaced["cells_changed"],
+        "columns_changed": replaced["columns_changed"],
+    }
+
+
 # --- adapters for the pre-chain API ---------------------------------------
 def trim_values(dataset, mode, delimiter="", exempt_cols=None):
     """Apply a single trimming rule to the active text columns."""

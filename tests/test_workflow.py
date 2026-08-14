@@ -235,6 +235,81 @@ def test_tidy_clears_the_debris_a_cut_leaves():
     assert text_rules.apply_chain("Q1. Are you well?", rules) == "Q1. Are you well?"
 
 
+def test_leftovers_stage_lists_and_fixes_what_rules_miss():
+    client = fresh_client()
+    upload(client, "sample_survey.xlsx")
+
+    trim = {"rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                      {"mode": "tidy"}]}
+    client.post("/api/text_rules/apply", json={"stage": "headers", **trim})
+    client.post("/api/text_rules/apply", json={"stage": "values", **trim})
+
+    left = client.post("/api/text_rules/leftovers", json={}).get_json()
+    assert left["headers"] == []          # the delimiter rule got them all
+    assert len(left["values"]) == 1       # one Malayalam free-text comment
+    entry = left["values"][0]
+    assert entry["columns"] == ["Any other comments?"] and entry["marks"]
+
+    fixed = client.post("/api/text_rules/fix_leftovers", json={
+        "values": {entry["value"]: "Wants more questions"}}).get_json()["result"]
+    assert fixed["cells_changed"] == entry["count"]
+    assert client.post("/api/text_rules/leftovers", json={}).get_json()["values"] == []
+
+    # a whole-cell replacement cannot bleed into a longer answer containing it
+    assert "Wants more questions" in set(state.session.df["Any other comments?"])
+    assert state.session.df["Any other comments?"].astype(str).str.contains(
+        "Some questions felt repetitive").any()
+
+
+def test_leftover_fixes_are_recorded_and_replay():
+    client = fresh_client()
+    upload(client, "sample_survey.xlsx")
+
+    client.post("/api/text_rules/apply", json={
+        "stage": "values",
+        "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                  {"mode": "tidy"}]})
+    left = client.post("/api/text_rules/leftovers", json={}).get_json()["values"][0]
+    client.post("/api/text_rules/fix_leftovers",
+                json={"values": {left["value"]: "Wants more questions"}})
+
+    recipe = json.loads(client.get("/api/export_cleaning_rules").data.decode("utf-8"))
+    assert [step["op"] for step in recipe["steps"]] == ["text_rules", "exact_values"]
+
+    # the same hand fix replays onto the next wave
+    client = fresh_client()
+    upload(client, "sample_survey.xlsx")
+    replayed = client.post(
+        "/api/apply_cleaning_rules_file",
+        data={"file": (io.BytesIO(json.dumps(recipe).encode("utf-8")), "rules.json")},
+        content_type="multipart/form-data",
+    ).get_json()["result"]
+
+    assert replayed["steps_applied"] == 2
+    comments = [col for col in state.session.df.columns if "comments" in col.lower()][0]
+    assert "Wants more questions" in set(state.session.df[comments])
+
+
+def test_whole_cell_replacement_is_exact():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    # "Agree" as a whole cell exists nowhere yet: every answer carries its tail
+    before = list(state.session.df.iloc[:, 7])
+    client.post("/api/text_rules/fix_leftovers", json={"values": {"Agree": "4"}})
+    assert list(state.session.df.iloc[:, 7]) == before
+
+    client.post("/api/text_rules/apply", json={
+        "stage": "values",
+        "rules": [{"mode": "delimiter", "delimiters": ["/"], "keep": "before"},
+                  {"mode": "tidy"}]})
+    client.post("/api/text_rules/fix_leftovers", json={"values": {"Agree": "4"}})
+
+    values = set(state.session.df.iloc[:, 7].dropna())
+    assert "4" in values                       # exact cells replaced
+    assert "Strongly Agree" in values          # the longer answer untouched
+
+
 def test_preview_matches_apply_and_never_mutates():
     client = fresh_client()
     upload(client, "sample_survey.csv")

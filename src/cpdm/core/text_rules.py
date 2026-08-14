@@ -193,6 +193,23 @@ def apply_chain_to_cell(value, rules):
     return apply_chain(value, rules)
 
 
+# --- detection ------------------------------------------------------------
+def detector(strict_ascii=False):
+    """The pattern that decides whether a character counts as non-English."""
+    return _DISALLOWED_STRICT_DETECT if strict_ascii else _DISALLOWED_EXTENDED_DETECT
+
+
+def non_english_chars(text, strict_ascii=False):
+    """The distinct offending characters in a string, in order of appearance."""
+    if not isinstance(text, str):
+        return []
+    seen = []
+    for char in detector(strict_ascii).findall(text):
+        if char not in seen and not char.isspace():
+            seen.append(char)
+    return seen
+
+
 # --- descriptions ---------------------------------------------------------
 def describe_rule(rule):
     mode = rule["mode"]

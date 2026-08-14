@@ -21,6 +21,7 @@ RECIPE_FILENAME = "cleaning_rules.json"
 OP_TEXT_RULES = "text_rules"
 OP_HEADER_MAP = "header_map"
 OP_VALUE_REPLACEMENTS = "value_replacements"
+OP_EXACT_VALUES = "exact_values"
 
 
 def export_rules(dataset):
@@ -30,7 +31,8 @@ def export_rules(dataset):
 
 
 def _replay_steps(dataset, steps):
-    counts = {OP_TEXT_RULES: 0, OP_HEADER_MAP: 0, OP_VALUE_REPLACEMENTS: 0}
+    counts = {OP_TEXT_RULES: 0, OP_HEADER_MAP: 0,
+              OP_VALUE_REPLACEMENTS: 0, OP_EXACT_VALUES: 0}
     headers_changed = 0
     cells_changed = 0
 
@@ -56,6 +58,11 @@ def _replay_steps(dataset, steps):
             headers_changed += len(dataset.cleaning_rules["header_map"]) - len(before)
         elif op == OP_VALUE_REPLACEMENTS:
             cleaning.apply_value_replacements(dataset, step.get("map", {}))
+        elif op == OP_EXACT_VALUES:
+            result = cleaning.replace_whole_cells(
+                dataset, step.get("map", {}), step.get("columns")
+            )
+            cells_changed += result["cells_changed"]
         else:
             raise ValueError(f"Step {position} has an unknown operation '{op}'.")
 

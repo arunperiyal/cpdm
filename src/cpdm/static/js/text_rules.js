@@ -15,6 +15,8 @@ function defaultTrimmerRules() {
     return [{ mode: 'non_english_to_end', strict_ascii: false }, { mode: 'tidy' }];
 }
 
+const TRIMMER_STAGES = ['headers', 'values', 'leftovers'];
+
 const trimmer = {
     stage: 'headers',
     rules: { headers: defaultTrimmerRules(), values: defaultTrimmerRules() },
@@ -25,7 +27,9 @@ const trimmer = {
     visible: [],        // column names currently listed, in render order
     anchor: null,       // last clicked row, for shift-click ranges
     preview: null,
-    showUnchanged: false
+    showUnchanged: false,
+    leftovers: null,    // stage 3: what the rules could not catch
+    fixes: { headers: {}, values: {} }
 };
 
 /* --- entry points ----------------------------------------------------- */
@@ -176,20 +180,41 @@ const trimmerListCtrl = {
 function trimmerListKeys(event) { columnListKeys(event, trimmerListCtrl); }
 function trimmerSearchKeys(event) { columnSearchKeys(event, trimmerListCtrl); }
 
+/* --- shortcuts ---------------------------------------------------------- */
+
+function trimmerShortcutBar() {
+    const keys = [
+        ['type', 'filter the columns'],
+        ['Enter', 'take the matches'],
+        ['Shift+Enter', 'drop them'],
+        ['↓ ↑', 'walk the list'],
+        ['Space', 'tick'],
+        ['Shift+Space', 'extend'],
+        ['Ctrl+A', 'take all listed'],
+        ['Esc', 'clear the filter']
+    ];
+    return `<div class="shortcut-bar">${keys.map(([key, what]) =>
+        `<span><kbd>${key}</kbd> ${what}</span>`).join('')}</div>`;
+}
+
 /* --- rendering --------------------------------------------------------- */
 
 function renderTrimmer() {
+    if (trimmer.stage === 'leftovers') return renderTrimmerLeftovers();
+
     const isHeaders = trimmer.stage === 'headers';
     document.getElementById('clean-modal-header').innerText =
-        `Clean -> Remove Non-English: Step ${isHeaders ? 1 : 2} of 2 — ${isHeaders ? 'Column Headers' : 'Cell Values'}`;
+        `Clean -> Remove Non-English: Step ${isHeaders ? 1 : 2} of 3 — ${isHeaders ? 'Column Headers' : 'Cell Values'}`;
 
     document.getElementById('clean-modal-body').innerHTML = `
         <div class="hint-box">
             <strong>${isHeaders ? 'Stage 1: clean the header row' : 'Stage 2: clean the cell values'}</strong>
             <span>${isHeaders
-                ? 'Rules run in order against each column name. Nothing changes until you apply, and Preview shows the exact result first.'
+                ? 'Rules run in order against each column name. Nothing changes until you press Apply, and Preview shows the exact result first.'
                 : 'Rules run in order against every cell of the selected columns. Numeric columns are skipped automatically.'}</span>
         </div>
+        ${trimmerShortcutBar()}
+        <div id="trimmer-status" class="trimmer-status"></div>
 
         <div class="trimmer-grid">
             <div class="rule-card">
@@ -384,13 +409,11 @@ function renderTrimmerFooter() {
     const isHeaders = trimmer.stage === 'headers';
     document.getElementById('clean-modal-footer').innerHTML = `
         <span id="trimmer-selection-count" class="muted" style="margin-right:auto;"></span>
-        <button class="btn btn-secondary" onclick="closeModal('modal-clean')">Cancel</button>
-        ${isHeaders
-            ? '<button class="btn btn-secondary" onclick="trimmerGoToValues()">Skip headers &rarr;</button>'
-            : '<button class="btn btn-secondary" onclick="trimmerGoToHeaders()">&larr; Back</button>'}
+        <button class="btn btn-secondary" onclick="closeModal('modal-clean')">Close</button>
+        ${isHeaders ? '' : '<button class="btn btn-secondary" onclick="trimmerBack()">&larr; Back</button>'}
         <button class="btn btn-secondary" onclick="trimmerPreview()">Preview</button>
-        <button class="btn btn-primary" onclick="trimmerApply()">
-            ${isHeaders ? 'Apply &amp; continue &rarr;' : 'Apply &amp; finish'}</button>`;
+        <button class="btn btn-secondary" onclick="trimmerApply()">Apply</button>
+        <button class="btn btn-primary" onclick="trimmerContinue()">Continue &rarr;</button>`;
     renderTrimmerColumns();
 }
 
@@ -406,12 +429,147 @@ function trimmerGoToStage(stage) {
         trimmer.stage = stage;
         trimmer.preview = null;
         trimmer.anchor = null;
+
+        if (stage === 'leftovers') return loadTrimmerLeftovers();
         renderTrimmer();
+        return null;
     }).catch(reportError);
 }
 
 function trimmerGoToValues() { return trimmerGoToStage('values'); }
 function trimmerGoToHeaders() { return trimmerGoToStage('headers'); }
+
+/* --- stage 3: leftovers the rules could not catch ----------------------- */
+
+function loadTrimmerLeftovers() {
+    document.getElementById('clean-modal-header').innerText =
+        'Clean -> Remove Non-English: Step 3 of 3 — Leftovers';
+    document.getElementById('clean-modal-body').innerHTML =
+        '<p class="muted">Looking for what the rules did not catch...</p>';
+    document.getElementById('clean-modal-footer').innerHTML = '';
+
+    return apiPost('/api/text_rules/leftovers', {})
+        .then(data => {
+            trimmer.leftovers = data;
+            trimmer.fixes = { headers: {}, values: {} };
+            renderTrimmerLeftovers();
+        })
+        .catch(reportError);
+}
+
+function renderTrimmerLeftovers() {
+    const data = trimmer.leftovers || { headers: [], values: [] };
+    const clean = !data.headers.length && !data.values.length;
+
+    const marks = list => list.map(char =>
+        `<span class="leftover-mark">${escapeHtml(char)}</span>`).join('');
+
+    const headerRows = data.headers.map((entry, index) => `
+        <div class="leftover-row">
+            <div class="leftover-was" title="${escapeHtml(entry.column)}">
+                ${escapeHtml(entry.column)} ${marks(entry.marks)}
+            </div>
+            <input type="text" value="${escapeHtml(entry.column)}"
+                   data-kind="headers" data-key="${escapeHtml(entry.column)}"
+                   oninput="trimmerEditFix(this)" onkeydown="trimmerLeftoverKeys(event, ${index})">
+        </div>`).join('');
+
+    const valueRows = data.values.map((entry, index) => `
+        <div class="leftover-row">
+            <div class="leftover-was" title="in ${escapeHtml(entry.columns.join(', '))}">
+                ${escapeHtml(entry.value)} ${marks(entry.marks)}
+                <span class="muted">×${entry.count} in ${entry.columns.length} column(s)</span>
+            </div>
+            <input type="text" value="${escapeHtml(entry.value)}"
+                   data-kind="values" data-key="${escapeHtml(entry.value)}"
+                   oninput="trimmerEditFix(this)"
+                   onkeydown="trimmerLeftoverKeys(event, ${data.headers.length + index})">
+        </div>`).join('');
+
+    document.getElementById('clean-modal-body').innerHTML = `
+        <div class="hint-box">
+            <strong>Stage 3: fix what is left by hand</strong>
+            <span>Everything below still holds a non-English character after your rules ran.
+            Edit the text on the right and apply — headers are renamed, and values are
+            replaced only where a cell matches exactly, so a fix cannot bleed into a longer
+            answer that contains it.</span>
+        </div>
+        <div class="shortcut-bar">
+            <span><kbd>↓ ↑</kbd> next / previous field</span>
+            <span><kbd>Enter</kbd> apply the fixes</span>
+            <span><kbd>Esc</kbd> close</span>
+        </div>
+        <div id="trimmer-status" class="trimmer-status"></div>
+
+        ${clean ? `
+            <div class="preview-empty muted">
+                Nothing left: no header or value holds a non-English character.
+            </div>` : `
+            ${data.headers.length ? `
+                <div class="col-header-row"><div style="flex:1;">Header</div><div style="flex:1;">Replace with</div></div>
+                ${headerRows}` : ''}
+            ${data.values.length ? `
+                <div class="col-header-row" style="margin-top:14px;"><div style="flex:1;">Value</div><div style="flex:1;">Replace with</div></div>
+                ${valueRows}` : ''}
+            ${data.truncated ? '<div class="diff-warn" style="margin-top:10px;">Only the first few hundred distinct values are listed.</div>' : ''}`}`;
+
+    document.getElementById('clean-modal-footer').innerHTML = `
+        <span class="muted" style="margin-right:auto;">
+            ${data.headers.length} header(s), ${data.values.length} value(s) left</span>
+        <button class="btn btn-secondary" onclick="closeModal('modal-clean')">Close</button>
+        <button class="btn btn-secondary" onclick="trimmerBack()">&larr; Back</button>
+        <button class="btn btn-secondary" onclick="loadTrimmerLeftovers()">Rescan</button>
+        <button class="btn btn-primary" onclick="trimmerApplyFixes()">Apply fixes</button>`;
+
+    const first = document.querySelector('.leftover-row input');
+    if (first) first.focus();
+}
+
+function trimmerEditFix(input) {
+    trimmer.fixes[input.dataset.kind][input.dataset.key] = input.value;
+}
+
+function trimmerLeftoverKeys(event, index) {
+    const inputs = document.querySelectorAll('.leftover-row input');
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        trimmerApplyFixes();
+    } else if (event.key === 'ArrowDown' && index + 1 < inputs.length) {
+        event.preventDefault();
+        inputs[index + 1].focus();
+    } else if (event.key === 'ArrowUp' && index > 0) {
+        event.preventDefault();
+        inputs[index - 1].focus();
+    }
+}
+
+function trimmerApplyFixes() {
+    const headers = {};
+    const values = {};
+    Object.entries(trimmer.fixes.headers).forEach(([key, value]) => {
+        if (value && value !== key) headers[key] = value;
+    });
+    Object.entries(trimmer.fixes.values).forEach(([key, value]) => {
+        if (value && value !== key) values[key] = value;
+    });
+
+    if (!Object.keys(headers).length && !Object.keys(values).length) {
+        trimmerStatus('Nothing edited yet.', 'diff-warn');
+        return;
+    }
+
+    apiPost('/api/text_rules/fix_leftovers', { headers, values })
+        .then(data => {
+            const result = data.result;
+            log(`[SUCCESS] Fixed by hand: ${result.headers_renamed} header(s) renamed, ${result.cells_changed} cell(s) replaced across ${result.columns_changed} column(s).`, 'success');
+            refreshStatus();
+            return loadTrimmerLeftovers();
+        })
+        .catch(error => {
+            trimmerStatus(escapeHtml(error.message), 'log-error');
+            reportError(error);
+        });
+}
 
 /* --- preview & apply ---------------------------------------------------- */
 
@@ -423,30 +581,84 @@ function trimmerRequestBody() {
     };
 }
 
+function trimmerStatus(message, kind = 'muted') {
+    const box = document.getElementById('trimmer-status');
+    if (box) box.innerHTML = `<span class="${kind}">${message}</span>`;
+}
+
 function trimmerPreview() {
+    trimmerStatus('Working out what would change...');
+
     return apiPost('/api/text_rules/preview', trimmerRequestBody())
         .then(preview => {
             trimmer.preview = preview;
             renderTrimmerPreview();
+
+            const summary = preview.stage === 'headers'
+                ? `${preview.columns_affected} of ${preview.columns_scanned} header(s) would change`
+                : `${preview.cells_changed} cell(s) in ${preview.columns_affected} column(s) would change`;
+            trimmerStatus(preview.columns_affected
+                ? `Preview: ${summary}.`
+                : 'Preview: nothing changes under these rules.',
+                preview.columns_affected ? 'log-success' : 'diff-warn');
+
+            // the box sits below the fold of a scrolling dialogue, so bring it up
+            document.getElementById('trimmer-preview')
+                .scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         })
-        .catch(reportError);
+        .catch(error => {
+            trimmerStatus(escapeHtml(error.message), 'log-error');
+            reportError(error);
+        });
 }
 
+/* Apply the current chain and stay put, so a second chain can follow. */
 function trimmerApply() {
     const isHeaders = trimmer.stage === 'headers';
 
     return apiPost('/api/text_rules/apply', trimmerRequestBody())
         .then(data => {
             const result = data.result;
-            if (isHeaders) {
-                log(`[SUCCESS] ${escapeHtml(result.description)}: ${result.headers_changed} header(s) changed.`, 'success');
-                return trimmerGoToValues();
-            }
-            log(`[SUCCESS] ${escapeHtml(result.description)}: ${result.cells_changed} cell(s) changed across ${result.columns_cleaned} column(s).`, 'success');
-            log('> Tip: Clean -> Save Cleaning File (.json) records these rules for the next wave.', 'info');
-            closeModal('modal-clean');
+            const summary = isHeaders
+                ? `${result.headers_changed} header(s) changed`
+                : `${result.cells_changed} cell(s) changed across ${result.columns_cleaned} column(s)`;
+
+            log(`[SUCCESS] ${escapeHtml(result.description)}: ${summary}.`, 'success');
+            trimmerStatus(`Applied — ${summary}. Continue when you are done here.`, 'log-success');
+
+            trimmer.preview = null;
             refreshStatus();
-            return null;
+            return trimmerReloadStage();     // pick up the new column names
         })
-        .catch(reportError);
+        .catch(error => {
+            trimmerStatus(escapeHtml(error.message), 'log-error');
+            reportError(error);
+        });
+}
+
+/* Re-read the columns without leaving the stage. */
+function trimmerReloadStage() {
+    return getState().then(state => {
+        trimmer.cols = state.cols;
+        trimmer.numeric = new Set(state.numeric_columns || []);
+        trimmer.ignored = new Set(state.ignored_columns || []);
+        trimmer.selected[trimmer.stage] = null;
+        renderTrimmerColumns();
+        renderTrimmerPreview();
+    }).catch(reportError);
+}
+
+function trimmerContinue() {
+    const next = TRIMMER_STAGES[TRIMMER_STAGES.indexOf(trimmer.stage) + 1];
+    if (!next) {
+        log('> Tip: Clean -> Save Cleaning File (.json) records this work for the next wave.', 'info');
+        closeModal('modal-clean');
+        return Promise.resolve();
+    }
+    return trimmerGoToStage(next);
+}
+
+function trimmerBack() {
+    const previous = TRIMMER_STAGES[TRIMMER_STAGES.indexOf(trimmer.stage) - 1];
+    return previous ? trimmerGoToStage(previous) : Promise.resolve();
 }

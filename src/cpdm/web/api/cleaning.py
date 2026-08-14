@@ -60,6 +60,29 @@ def apply_text_rules():
     return ok(result=result)
 
 
+@api_route(bp, "/text_rules/leftovers", methods=["POST"])
+def find_leftovers():
+    """Headers and values the rules did not catch — stage 3 of the wizard."""
+    body = payload()
+    return jsonify(
+        cleaning.find_leftovers(
+            state.session, body.get("columns"), bool(body.get("strict_ascii"))
+        )
+    )
+
+
+@api_route(bp, "/text_rules/fix_leftovers", methods=["POST"])
+def fix_leftovers():
+    body = payload()
+    result = cleaning.fix_leftovers(
+        state.session,
+        headers=body.get("headers"),
+        values=body.get("values"),
+        columns=body.get("columns"),
+    )
+    return ok(result=result)
+
+
 @api_route(bp, "/clean_text_pattern", methods=["POST"])
 def clean_text_pattern():
     """Pre-wizard endpoint: one value rule, kept as an adapter."""

@@ -58,9 +58,11 @@ Only the first sheet of a workbook is read.
    Values already mapped are hidden on later passes. Numeric columns, numbers stored as
    text, blanks and `nan`/`none`/`null` are skipped.
 
-**Remove Non-English / Trim Text** — a two-stage wizard: stage 1 cleans the header row,
-stage 2 cleans the cell values. Each stage takes an **ordered chain of rules** plus the
-columns to apply them to, and previews the result before anything is written.
+**Remove Non-English / Trim Text** — a three-stage wizard: stage 1 cleans the header row,
+stage 2 the cell values, stage 3 the leftovers. The first two take an **ordered chain of
+rules** plus the columns to apply them to, and preview the result before anything is
+written. **Preview**, **Apply** and **Continue** are separate buttons: applying keeps you
+on the stage so one chain can follow another.
 
 - *Cut from the first non-English character to the end* — `WhatsApp (വാട്സാപ്പ്)` → `WhatsApp (`
 - *Cut at a delimiter* — several delimiters at once (`/ ( -`), cutting at whichever comes first, keeping the text **before** or **after** it
@@ -78,8 +80,16 @@ clears the filter. Shift-click still works, and the same keys drive the Fields �
 picker. Numeric columns are excluded from the values stage automatically. **Preview** lists every header as
 before → after — warning about collisions (`Name` → `Name_1`) and about rules that would
 empty a header — or, for values, the changed-cell count per column with up to five
-examples. The ⚡ button inside the header-mapping wizard opens the same wizard at its
-values stage.
+examples, with the count echoed in a status line beside the buttons.
+
+**Stage 3** lists every header and distinct value that still holds a non-English character
+— the free-text answer in another script, the header nobody standardised — with the
+offending characters highlighted and, for values, the cell count and columns. Edit them by
+hand and apply: headers are renamed, and values are replaced **only where a cell matches
+exactly**, so fixing `Agree` cannot touch `Strongly Agree`. Both are recorded in the
+cleaning recipe and replay with it.
+
+The ⚡ button inside the header-mapping wizard opens the same wizard at its values stage.
 
 **Save Cleaning File (.json)** — exports the recorded recipe as `cleaning_rules.json`:
 an ordered `steps` log (text rules, header maps, value replacements) plus the flat
@@ -301,6 +311,8 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `POST` | `/api/clean_values` | Apply global value replacements |
 | `POST` | `/api/text_rules/preview` | What a rule chain would do (never mutates) |
 | `POST` | `/api/text_rules/apply` | Run a rule chain over headers or values |
+| `POST` | `/api/text_rules/leftovers` | Headers and values the rules did not catch |
+| `POST` | `/api/text_rules/fix_leftovers` | Hand fixes: rename headers, replace whole cells |
 | `POST` | `/api/clean_text_pattern` | Adapter: one value rule (pre-wizard API) |
 | `POST` | `/api/remove_non_english_advanced` | Adapter: one header + one value rule |
 | `GET` | `/api/export_cleaning_rules` | Download `cleaning_rules.json` |
@@ -330,7 +342,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Thirty-nine end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Forty-two end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
@@ -343,7 +355,8 @@ scoring (option seeding and ordering, hand-added and deliberately unscored optio
 per-item direct/reverse, the no-mutation preview, unrecognised answers being reported
 rather than dropped, blanks surviving value replacement, scoring being idempotent and
 reversible, a scale renaming its own items, deleting a scale restoring the answers, and
-scale definitions travelling between datasets by name, by columns and by position).
+scale definitions travelling between datasets by name, by columns and by position, and
+the leftovers stage listing, fixing and recording what the rules could not catch).
 
 ---
 

@@ -4,7 +4,7 @@ The Clean menu holds four tools. They are meant to be used in this order: trim t
 
 ## 1. Remove Non-English / Trim Text
 
-A two-stage wizard: **Step 1 cleans the header row, Step 2 cleans the cell values.** Each stage takes an ordered list of rules and a set of target columns, and neither writes anything until you have had the chance to preview it.
+A three-stage wizard: **step 1 cleans the header row, step 2 cleans the cell values, step 3 is for whatever the rules could not catch.** The first two stages take an ordered list of rules and a set of target columns, and neither writes anything until you press Apply.
 
 ### The rules
 
@@ -50,7 +50,25 @@ So `WB` then Enter selects the five wellbeing items and nothing else. Shift-clic
 - Stage 1 lists every header as before → after, and warns when two headers would collapse onto the same name (the later one becomes `Name_1`) or when a rule would empty a header (the original is kept).
 - Stage 2 reports how many cells change per column, with up to five before → after examples each.
 
-Then **Apply & continue →** commits stage 1 and moves to stage 2; **Apply & finish** commits stage 2. **Skip headers →** jumps straight to the values stage.
+**Preview** and the buttons beside it are separate on purpose:
+
+| Button | What it does |
+| --- | --- |
+| **Preview** | Shows the result without changing anything, and reports the count in the status line under the shortcuts. |
+| **Apply** | Runs the rules and stays on this stage, so you can follow one chain with another — cut at `/`, apply, then strip what is left, apply again. |
+| **Continue →** | Moves to the next stage. It does not apply anything, so preview and apply first if you meant to. |
+| **← Back** | Returns to the previous stage. |
+
+### Stage 3: leftovers
+
+Rules handle the regular cases. What survives them is usually a handful of oddities — a free-text answer written entirely in another script, a header nobody thought to standardise — and no rule will fix those sensibly.
+
+Stage 3 lists every header and every distinct value that still holds a non-English character, with the offending characters highlighted and, for values, how many cells hold it and which columns they are in. Edit the text on the right and press **Apply fixes**:
+
+- headers are renamed;
+- values are replaced **only where a cell matches exactly**, so fixing `Agree` cannot touch `Strongly Agree`.
+
+**Rescan** re-reads the data, so you can work through a long list in passes. Both kinds of fix are recorded in the cleaning recipe, so they replay on the next wave along with everything else.
 
 > Pick the delimiter rule when your export is consistently `English / translation`. Pick *strip* only when the other script is scattered inside the text rather than appended at the end. Always finish with *tidy*.
 
@@ -104,7 +122,7 @@ Because the recipe starts from the original header names, apply it to an untouch
 
 ```
 Open file
-  └─ Remove Non-English      (bulk, mechanical)
+  └─ Remove Non-English      (rules, then leftovers by hand)
        └─ Header Mapping      (rename + choose ignored columns)
             └─ Value Replacement  (tidy up inconsistent answers)
                  └─ Save Cleaning File

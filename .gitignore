@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Exported working files (processed_* is what CPDM writes on export)
+processed_*.xlsx
+processed_*.csv
+cleaning_rules.json

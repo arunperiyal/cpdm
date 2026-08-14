@@ -1,0 +1,39 @@
+{
+  "header_map": {
+    "Timestamp": "Timestamp",
+    "Name / പേര്": "Name",
+    "Age / വയസ്സ്": "Age",
+    "Gender / ലിംഗം": "Gender",
+    "District / ജില്ല": "District",
+    "Occupation / തൊഴിൽ": "Occupation",
+    "Do you use social media daily? / ദിവസവും സമൂഹമാധ്യമം ഉപയോഗിക്കുന്നുണ്ടോ?": "Daily_Social_Media",
+    "1. I feel calm and relaxed most days / എനിക്ക് മിക്ക ദിവസവും ശാന്തത അനുഭവപ്പെടുന്നു": "WB1",
+    "2. I sleep well at night / എനിക്ക് രാത്രി നന്നായി ഉറങ്ങാൻ കഴിയുന്നു": "WB2",
+    "3. I often feel tense for no clear reason / വ്യക്തമായ കാരണമില്ലാതെ പിരിമുറുക്കം തോന്നാറുണ്ട്": "WB3",
+    "4. I enjoy my daily activities / ദൈനംദിന പ്രവർത്തനങ്ങൾ ഞാൻ ആസ്വദിക്കുന്നു": "WB4",
+    "5. I feel hopeless about the future / ഭാവിയെക്കുറിച്ച് പ്രതീക്ഷയില്ലായ്മ തോന്നുന്നു": "WB5",
+    "6. I check my phone within minutes of waking up / ഉണർന്ന ഉടനെ ഫോൺ പരിശോധിക്കുന്നു": "DS1",
+    "7. Notifications interrupt my work / അറിയിപ്പുകൾ എന്റെ ജോലിയെ തടസ്സപ്പെടുത്തുന്നു": "DS2",
+    "8. I can put my phone away whenever I choose to / വേണമെന്ന് തോന്നുമ്പോൾ ഫോൺ മാറ്റിവയ്ക്കാൻ കഴിയും": "DS3",
+    "9. I feel anxious when my phone battery is low / ബാറ്ററി കുറയുമ്പോൾ ഉത്കണ്ഠ തോന്നുന്നു": "DS4",
+    "Any other comments? / മറ്റ് അഭിപ്രായങ്ങൾ": "Comments"
+  },
+  "value_replacements": {
+    "_global": {
+      "Strongly Agree / പൂർണ്ണമായും യോജിക്കുന്നു": "5",
+      "Agree / യോജിക്കുന്നു": "4",
+      "Neutral / നിഷ്പക്ഷം": "3",
+      "Disagree / വിയോജിക്കുന്നു": "2",
+      "Strongly Disagree / പൂർണ്ണമായും വിയോജിക്കുന്നു": "1",
+      "Male / പുരുഷൻ": "Male",
+      "Female / സ്ത്രീ": "Female",
+      "Yes / അതെ": "Yes",
+      "No / അല്ല": "No"
+    }
+  },
+  "ignored_columns": [
+    "Timestamp",
+    "Name / പേര്",
+    "Any other comments? / മറ്റ് അഭിപ്രായങ്ങൾ"
+  ]
+}

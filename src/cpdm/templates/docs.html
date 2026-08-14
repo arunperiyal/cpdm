@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if doc %}{{ doc.title }} — CPDM Docs{% else %}CPDM Documentation{% endif %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/docs.css') }}">
+</head>
+<body class="docs-page">
+
+    <div id="pane-menu">
+        <a class="nav-btn" href="/">&#8592; Workspace</a>
+        <span class="docs-title">CPDM Documentation</span>
+    </div>
+
+    <div class="docs-layout">
+        <nav class="docs-sidebar">
+            {% for section in sections %}
+                <div class="docs-section">
+                    <div class="docs-section-label">{{ section.label }}</div>
+                    <div class="docs-section-blurb">{{ section.blurb }}</div>
+                    {% for item in section.docs %}
+                        <a class="docs-link {% if doc and doc.section == item.section and doc.slug == item.slug %}active{% endif %}"
+                           href="{{ item.url }}" title="{{ item.summary }}">{{ item.title }}</a>
+                    {% else %}
+                        <div class="docs-empty">No pages yet.</div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+
+            {% if samples %}
+                <div class="docs-section">
+                    <div class="docs-section-label">Sample Data</div>
+                    <div class="docs-section-blurb">Download and open these in the workspace.</div>
+                    {% for item in samples %}
+                        <a class="docs-link" href="{{ item.url }}" title="{{ item.description }}">
+                            {{ item.name }} <span class="docs-size">{{ item.size_kb }} KB</span>
+                        </a>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </nav>
+
+        <main class="docs-main">
+            {% if doc %}
+                <div class="docs-breadcrumb">{{ doc.section_label }}</div>
+                <article class="doc-content">{{ doc.html | safe }}</article>
+            {% else %}
+                <article class="doc-content"><p>{{ missing }}</p></article>
+            {% endif %}
+        </main>
+    </div>
+
+</body>
+</html>

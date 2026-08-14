@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CPDM Workspace</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/docs.css') }}">
+</head>
+<body>
+
+    <!-- PANE 1: MENU BAR -->
+    <div id="pane-menu">
+        <div class="nav-item">
+            <button class="nav-btn">File</button>
+            <div class="dropdown">
+                <div class="dropdown-item" onclick="triggerFileSelect()">Open (.xlsx / .csv)</div>
+                <div class="dropdown-item" onclick="exportFile('xlsx')">Export (.xlsx)</div>
+                <div class="dropdown-item" onclick="exportFile('csv')">Export (.csv)</div>
+            </div>
+        </div>
+
+        <div class="nav-item">
+            <button class="nav-btn">Clean</button>
+            <div class="dropdown">
+                <div class="dropdown-item" onclick="startCleaningWizard()">Header Mapping &amp; Value Replacement</div>
+                <div class="dropdown-item" onclick="openRemoveNonEnglishModal()">Remove Non-English</div>
+                <div class="dropdown-item" onclick="exportCleaningRules()">Save Cleaning File (.json)</div>
+                <div class="dropdown-item" onclick="triggerRulesFileSelect()">Apply Cleaning File (.json)</div>
+            </div>
+        </div>
+
+        <div class="nav-item">
+            <button class="nav-btn">Fields</button>
+            <div class="dropdown">
+                <div class="dropdown-item" onclick="openCategoriseModal()">Categorise</div>
+            </div>
+        </div>
+
+        <div class="nav-item">
+            <button class="nav-btn">Scales</button>
+            <div class="dropdown">
+                <div class="dropdown-item" onclick="openCreateScaleModal()">Create Scale</div>
+                <div class="dropdown-item" onclick="openNumeriseModal()">Numerise</div>
+                <div class="dropdown-item" onclick="openScoringModal()">Scoring</div>
+            </div>
+        </div>
+
+        <div class="nav-item">
+            <button class="nav-btn">Compute</button>
+            <div class="dropdown">
+                <div class="dropdown-item" onclick="openComputeModal()">Row Calculations</div>
+            </div>
+        </div>
+
+        <!-- Documentation is generated from the docs/ folder at page load -->
+        <div class="nav-item">
+            <button class="nav-btn">Help</button>
+            <div class="dropdown dropdown-wide">
+                <div class="dropdown-item" onclick="openDocsBrowser()">Documentation Browser &#8599;</div>
+                <div class="dropdown-item" onclick="openSamplesModal()">Sample Data Files</div>
+                {% for section in doc_sections %}
+                    {% if section.docs %}
+                        <div class="dropdown-heading">{{ section.label }}</div>
+                        {% for doc in section.docs %}
+                            <div class="dropdown-item"
+                                 title="{{ doc.summary }}"
+                                 onclick="openDocModal('{{ doc.section }}', '{{ doc.slug }}')">{{ doc.title }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <div id="menu-status" class="menu-status">No dataset loaded</div>
+    </div>
+
+    <input type="file" id="file-input" accept=".xlsx,.xlsm,.csv,.tsv" style="display: none;" onchange="uploadFile()">
+    <input type="file" id="rules-file-input" accept=".json" style="display: none;" onchange="applyCleaningRulesFile()">
+
+    <!-- WORKSPACE -->
+    <div id="workspace">
+        <div id="pane-output">
+            <div class="log-entry log-info">&gt; Workspace initialized. Load a data file via File -&gt; Open to begin.</div>
+            <div class="log-entry">&gt; New here? Open <a href="/docs" target="_blank">the documentation</a> or type <strong>help</strong> below.</div>
+        </div>
+
+        <div id="pane-command">
+            <span id="cmd-prompt">py-data&gt;</span>
+            <input type="text" id="cmd-input" autocomplete="off"
+                   placeholder="Type a command (e.g., 'help', 'show', 'info', 'summary', 'docs', 'clear')..."
+                   onkeydown="handleCommand(event)">
+        </div>
+    </div>
+
+    <!-- MODALS -->
+    <!-- Cleaning wizard / text trimmer (body is rendered by cleaning.js) -->
+    <div id="modal-clean" class="modal">
+        <div class="modal-content" style="max-width: 900px; width: 92%;">
+            <div class="modal-header" id="clean-modal-header">Clean &#8594; Step 1: Header Mapping &amp; Selection</div>
+            <div class="modal-body" id="clean-modal-body" style="max-height: 450px; overflow-y: auto;"></div>
+            <div class="modal-footer" id="clean-modal-footer"></div>
+        </div>
+    </div>
+
+    <!-- Create Scale -->
+    <div id="modal-create-scale" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Scales &#8594; Define New Scale</div>
+            <div class="modal-body">
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <input type="text" id="new-scale-input" placeholder="Enter Scale Name (e.g., Anxiety_Scale)" style="flex:1;">
+                    <button class="btn btn-primary" onclick="submitCreateScale()">Create</button>
+                </div>
+                <label style="font-weight:bold; display:block; margin-bottom:8px;">Existing Defined Scales:</label>
+                <div id="defined-scales-list" class="scroll-box"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-create-scale')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Categorise -->
+    <div id="modal-categorise" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Fields &#8594; Categorise Columns</div>
+            <div class="modal-body" id="categorise-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-categorise')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveCategorisation()">Save Categories</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Numerise -->
+    <div id="modal-numerise" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Scales &#8594; Numerise Headers</div>
+            <div class="modal-body">
+                <div style="margin-bottom: 15px;">
+                    <label>Target Scale Group:</label>
+                    <select id="num-target-scale" style="width: 100%; margin-top: 5px;"></select>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label>Prefix for scale headers:</label>
+                    <input type="text" id="num-prefix" value="Scale_" style="width: 100%; margin-top: 5px;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-numerise')">Cancel</button>
+                <button class="btn btn-primary" onclick="applyNumerise()">Apply Numerisation</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scoring -->
+    <div id="modal-scoring" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Scales &#8594; Scoring Assignment</div>
+            <div class="modal-body" id="scoring-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-scoring')">Cancel</button>
+                <button class="btn btn-primary" onclick="applyScoring()">Apply Scoring</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compute -->
+    <div id="modal-compute" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Compute &#8594; Row Function across Scales</div>
+            <div class="modal-body">
+                <div style="margin-bottom: 12px;">
+                    <label style="display:block; margin-bottom: 4px;">Target Column Name:</label>
+                    <input type="text" id="compute-target-col" value="Scale_Mean" style="width: 100%;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display:block; margin-bottom: 4px;">Calculation Function:</label>
+                    <select id="compute-function" style="width: 100%;">
+                        <option value="mean">Mean (Average)</option>
+                        <option value="sum">Sum (Total Score)</option>
+                        <option value="min">Minimum Value</option>
+                        <option value="max">Maximum Value</option>
+                        <option value="std">Standard Deviation</option>
+                    </select>
+                </div>
+                <label style="display:block; margin-bottom: 6px; font-weight: bold;">Select Scale Items to Include:</label>
+                <div id="compute-cols-list" class="scroll-box"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-compute')">Cancel</button>
+                <button class="btn btn-primary" onclick="applyCompute()">Compute Column</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documentation viewer -->
+    <div id="modal-docs" class="modal">
+        <div class="modal-content" style="max-width: 900px; width: 92%;">
+            <div class="modal-header" id="docs-modal-header">Documentation</div>
+            <div class="modal-body doc-content" id="docs-modal-body"></div>
+            <div class="modal-footer">
+                <a class="btn btn-secondary" id="docs-modal-open" href="/docs" target="_blank">Open in new tab</a>
+                <button class="btn btn-primary" onclick="closeModal('modal-docs')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/core.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/files.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/cleaning.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/scales.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/compute.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/console.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/docs.js') }}"></script>
+</body>
+</html>

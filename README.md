@@ -21,8 +21,42 @@ python app.py
 Python 3 with Flask, pandas and openpyxl. The optional `markdown` package improves the
 rendering of the documentation pages; without it CPDM uses its own built-in renderer.
 
-Environment overrides: `CPDM_HOST`, `CPDM_PORT`, `CPDM_DEBUG`, `CPDM_DOCS_DIR`,
-`CPDM_SAMPLES_DIR`.
+Environment overrides: `CPDM_HOST`, `CPDM_PORT`, `CPDM_DEBUG`, `CPDM_NO_BROWSER`,
+`CPDM_DOCS_DIR`, `CPDM_SAMPLES_DIR`.
+
+### Running it as a service
+
+`cpdmctl.sh` hosts the workspace so it is there whenever you want it:
+
+```bash
+./cpdmctl.sh start                  # run it now, in the background
+./cpdmctl.sh status                 # is it up, and on what URL
+./cpdmctl.sh stop
+
+./cpdmctl.sh install                # write a systemd unit, enable it, start it
+./cpdmctl.sh uninstall              # stop, disable and remove that unit
+```
+
+Without a unit installed, `start`/`stop` manage a background process with a pid file in
+`~/.local/state/cpdm`; once `install` has run, the same commands drive systemd, and each
+one says which it is using. `logs` follows either the journal or the log file.
+
+| Option | |
+| --- | --- |
+| `--user` / `--system` | Per-user unit in `~/.config/systemd/user` (default, no sudo), or a system-wide one in `/etc/systemd/system` |
+| `--host`, `--port` | Where to bind — default `127.0.0.1:5000` |
+| `--python PATH` | Which interpreter to run under |
+| `--gunicorn` | Serve through gunicorn instead of Flask's development server |
+| `--linger` | With `install --user`: keep the service running when you log out |
+| `--dry-run` | Print the unit file instead of writing it |
+
+The service always runs **one worker**: CPDM keeps its dataset in the process, so a second
+worker would answer from a different in-memory dataset.
+
+The default `127.0.0.1` is reachable only from this machine. CPDM has no login and no
+access control, so anyone who can reach the port can read and change the loaded dataset —
+bind it wider only on a network you trust, and put an authenticating reverse proxy in
+front of it otherwise.
 
 New to the tool? Download `samples/sample_survey.xlsx` (Help → Sample Data Files) and
 follow [docs/help/01-getting-started.md](docs/help/01-getting-started.md), which is also
@@ -266,6 +300,7 @@ Regenerate them with `python samples/generate_samples.py` (synthetic, fixed seed
 
 ```
 app.py                       Launcher: puts src/ on the path, runs create_app()
+cpdmctl.sh                   Service control: start/stop, install/remove a systemd unit
 requirements.txt
 docs/help/, docs/theory/     Markdown served at /docs
 samples/                     Example datasets + generate_samples.py

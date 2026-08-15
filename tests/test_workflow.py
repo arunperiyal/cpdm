@@ -1112,6 +1112,144 @@ def test_groups_console_command():
     assert "options: 1=1, 2=2, 3=3, 4=4, 5=5" in scales_output
 
 
+def test_table_view_and_header():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    page = client.get("/api/table/page?offset=0&limit=3").get_json()
+    assert page["total"] == 30 and len(page["rows"]) == 3
+    assert page["index"] == ["0", "1", "2"]
+
+    report = client.get("/api/table/columns").get_json()
+    ages = next(c for c in report["columns"] if c["name"].startswith("Age"))
+    assert ages["dtype"] == "number" and ages["filled"] == 30
+
+    renamed = client.post("/api/table/rename", json={"map": {"Timestamp": "When"}}).get_json()
+    assert renamed["result"]["renamed"] == 1
+    assert "When" in state.session.df.columns
+
+    # a rename that would duplicate a name is refused, not silently applied
+    clash = client.post("/api/table/rename", json={"map": {"When": "Age / വയസ്സ്"}})
+    assert clash.status_code == 400 and "twice" in clash.get_json()["error"]
+
+
+def test_table_columns_reorder_and_drop():
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "WB", "spec": "WB1:WB5"})
+
+    order = ["WB1", "Age", "Gender"]
+    columns = client.post("/api/table/reorder", json={"order": order}).get_json()["columns"]
+    assert columns[:3] == order
+    assert len(columns) == 17          # the rest keep their places
+
+    dropped = client.post("/api/table/drop_columns",
+                          json={"columns": ["WB5", "Comments"]}).get_json()["result"]
+    assert set(dropped["dropped"]) == {"WB5", "Comments"}
+    assert "WB5" not in state.session.df.columns
+    # the group it belonged to lets it go
+    assert groups.find(state.session, "WB")["columns"] == ["WB1", "WB2", "WB3", "WB4"]
+
+    everything = client.post("/api/table/drop_columns",
+                             json={"columns": list(state.session.df.columns)})
+    assert everything.status_code == 400 and "every column" in everything.get_json()["error"]
+
+
+def test_table_sort_keeps_scoring_aligned():
+    """Sorting must carry the remembered answers, or a re-score reads wrong rows."""
+    client = fresh_client()
+    prepared_survey(client)
+
+    client.post("/api/groups/create", json={"name": "WB", "spec": "WB1:WB5"})
+    client.post("/api/create_scale", json={"group": "WB", "name": "Wellbeing"})
+    client.post("/api/scales/items", json={"name": "Wellbeing", "items": {"WB1": "Reverse"}})
+
+    before = dict(zip(state.session.df["Name"], state.session.df["WB1"]))
+
+    client.post("/api/table/sort", json={"keys": [{"column": "Age", "descending": True}]})
+    ages = list(state.session.df["Age"])
+    assert ages == sorted(ages, reverse=True)
+
+    # every respondent still carries their own score after the reorder
+    after = dict(zip(state.session.df["Name"], state.session.df["WB1"]))
+    assert after == before
+
+    # and re-scoring works from the answers, still row by row
+    client.post("/api/scales/items", json={"name": "Wellbeing", "items": {"WB1": "Direct"}})
+    direct = dict(zip(state.session.df["Name"], state.session.df["WB1"]))
+    assert all(6 - before[name] == value for name, value in direct.items()
+               if pd.notna(before[name]))
+
+
+def test_table_filter_counts_before_it_deletes():
+    client = fresh_client()
+    prepared_survey(client)
+
+    conditions = [{"column": "Age", "operator": "greater_than", "value": 40}]
+
+    counted = client.post("/api/table/filter/count",
+                          json={"conditions": conditions}).get_json()
+    assert counted["total"] == 30
+    assert counted["matched"] + counted["remaining_if_dropped"] == 30
+    assert len(state.session.df) == 30        # counting changes nothing
+
+    kept = client.post("/api/table/filter",
+                       json={"conditions": conditions, "action": "keep"}).get_json()["result"]
+    assert kept["rows"] == counted["matched"]
+    assert (state.session.df["Age"] > 40).all()
+
+    # text tests, and 'any' rather than 'all'
+    either = client.post("/api/table/filter/count", json={
+        "conditions": [{"column": "District", "operator": "equals", "value": "Wayanad"},
+                       {"column": "District", "operator": "contains", "value": "kollam"}],
+        "match": "any"}).get_json()
+    assert either["matched"] >= 0
+
+    bad = client.post("/api/table/filter/count", json={
+        "conditions": [{"column": "Age", "operator": "greater_than", "value": "old"}]})
+    assert bad.status_code == 400 and "not a number" in bad.get_json()["error"]
+
+
+def test_table_row_deletion():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    dropped = client.post("/api/table/drop_rows", json={"index": ["0", "5"]}).get_json()
+    assert dropped["result"]["removed"] == 2 and dropped["result"]["rows"] == 28
+
+    # the labels that remain still identify the same rows
+    page = client.get("/api/table/page?offset=0&limit=2").get_json()
+    assert page["index"] == ["1", "2"]
+
+    missing = client.post("/api/table/drop_rows", json={"index": ["999"]})
+    assert missing.status_code == 400
+
+    blanks = client.post("/api/table/drop_blank_rows", json={}).get_json()["result"]
+    assert blanks["removed"] == 0        # the sample has no wholly empty row
+
+
+def test_about_reports_what_is_true():
+    client = fresh_client()
+    info = client.get("/api/about").get_json()
+
+    assert info["name"] == "CPDM" and info["version"]
+    assert [person["name"] for person in info["contributors"]] == [
+        "Juby Merin Sam", "Arun Periyal"]
+    assert info["dependencies"]["flask"]
+    assert info["loaded"] is None
+
+    # no LICENSE file in the repository: say so rather than implying terms
+    licence_files = [name for name in ("LICENSE", "LICENSE.txt", "LICENSE.md", "COPYING")
+                     if os.path.isfile(os.path.join(PROJECT_ROOT, name))]
+    assert info["licence"]["declared"] is bool(licence_files)
+    if not licence_files:
+        assert "No licence file" in info["licence"]["summary"]
+
+    upload(client, "sample_survey.csv")
+    assert client.get("/api/about").get_json()["loaded"]["rows"] == 30
+
+
 def test_markdown_fallback_renderer():
     html = _fallback_render(
         "# Title\n\nSome **bold** and `code`.\n\n"

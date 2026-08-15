@@ -187,6 +187,30 @@ group trims its subgroups, and renames of a scale's items are followed automatic
 a group removes its subgroups and any scale declared on them. `groups` at the prompt
 prints the tree, with the scale each group backs.
 
+### Table
+
+Direct operations on the data, none of them recorded in the cleaning recipe and none
+reversible — export first if unsure.
+
+**Header** — every column with its position, type, filled/blank counts, distinct values
+and the group and scale it belongs to; rename a column outright from here, with groups,
+keying and remembered answers following it. Names that would collide are refused.
+
+**Rows** — a paged view, 25 at a time. Rows carry a stable label that survives sorting and
+filtering, so a ticked row stays the row you meant. Delete ticked rows, drop wholly blank
+rows, or drop rows that repeat an earlier one exactly.
+
+**Columns** — reorder with the arrows (the order here is the export order) or delete
+columns and their data; a deleted column leaves any group that held it.
+
+**Sort** — by one column or several, the later ones breaking ties. Text sorts
+case-insensitively, numbers sort as numbers, and the scores already computed travel with
+their rows.
+
+**Filter** — tests of the form *column · comparison · value*, combined with **every** or
+**any**, then **keep** or **drop** the rows that match. **Count matches** reports how many
+rows are involved, and what would remain either way, before anything is deleted.
+
 ### Scales
 
 **Create Scale** — declares that a group's columns are one instrument. Pick the group; the
@@ -252,6 +276,10 @@ command `docs` prints links to all of them.
 
 **Sample Data Files** — lists `samples/` with descriptions and download links.
 
+**About CPDM** — a read-only card: what the app is, its version, the licence as the
+repository actually states it, the contributors, what it is running on, and what is
+loaded right now.
+
 ### Command console
 
 | Command | Result |
@@ -286,6 +314,7 @@ in the filename controls ordering only; the URL uses the rest of the name.
 | [Computing Scores and Exporting](docs/help/05-compute-and-export.md) | [Tidy Data and Why Column Names Matter](docs/theory/05-tidy-data.md) |
 | [Console Commands](docs/help/06-console-commands.md) | |
 | [Sample Data](docs/help/07-sample-data.md) | |
+| [The Table Menu](docs/help/08-the-table-menu.md) | |
 
 Adding a page is just adding a `.md` file to `docs/help/` or `docs/theory/` — the sidebar,
 the Help menu and the `docs` command pick it up on the next page load.
@@ -341,6 +370,8 @@ src/cpdm/
         scales.py            Scales: options, item keying, scoring, renaming
         compute.py           Row-wise statistics
         console.py           Command prompt handlers
+        table.py             The Table menu: header, rows, columns, sort, filter
+        about_info.py        What the About box reports
         docs_library.py      Discovery of docs/*.md
         markdown_lite.py     Dependency-free Markdown renderer (fallback)
         samples.py           Sample-file listing and download resolution
@@ -351,7 +382,7 @@ src/cpdm/
     templates/               index.html (workspace), docs.html (reader)
     static/css/              style.css, docs.css
     static/js/               core, files, cleaning, text_rules (the trimming
-                             wizard), groups, scales, compute, console, docs
+                             wizard), groups, scales, table, compute, console, docs
 ```
 
 Core modules take a `Dataset` as their first argument and never import Flask, so they can
@@ -396,6 +427,11 @@ the reply; `ValueError` from core becomes a 400 with its message.
 | `POST` | `/api/scales/inspect_file`, `/api/scales/import` | Inspect and load a scale file |
 | `POST` | `/api/compute` | Row-wise statistic into a new column |
 | `POST` | `/api/command` | Console commands |
+| `GET` | `/api/table/page`, `/api/table/columns` | A page of rows; the column report |
+| `POST` | `/api/table/rename`, `/api/table/reorder`, `/api/table/drop_columns` | Header and column edits |
+| `POST` | `/api/table/drop_rows`, `/api/table/drop_blank_rows`, `/api/table/drop_duplicates` | Row deletion |
+| `POST` | `/api/table/sort`, `/api/table/filter`, `/api/table/filter/count` | Sorting and filtering |
+| `GET` | `/api/about` | What the About box shows |
 | `GET` | `/api/docs`, `/api/docs/<section>/<slug>` | Doc listing and rendered page |
 
 ### Tests
@@ -404,7 +440,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Forty-two end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Forty-eight end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
@@ -418,7 +454,11 @@ per-item direct/reverse, the no-mutation preview, unrecognised answers being rep
 rather than dropped, blanks surviving value replacement, scoring being idempotent and
 reversible, a scale renaming its own items, deleting a scale restoring the answers, and
 scale definitions travelling between datasets by name, by columns and by position, and
-the leftovers stage listing, fixing and recording what the rules could not catch).
+the leftovers stage listing, fixing and recording what the rules could not catch), the
+Table menu (paged rows, the column report, refused rename collisions, reorder and drop,
+sorting keeping every respondent's score with their row, filtering counted before it
+deletes, and row labels staying stable), and the About box reporting the licence the
+repository actually has.
 
 ---
 

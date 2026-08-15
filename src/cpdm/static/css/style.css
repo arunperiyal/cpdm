@@ -130,6 +130,23 @@ select, input[type="text"], input[type="number"] { background: #11111b; border: 
     background: #11111b; border: 1px solid #45475a; border-bottom-width: 2px;
     border-radius: 3px; padding: 1px 5px; margin-right: 3px;
 }
+/* TABLE MENU */
+.table-scroll { overflow: auto; max-height: 52vh; border: 1px solid #313244; border-radius: 6px; }
+.table-scroll table.data-table { margin: 0; font-size: 12px; }
+.table-scroll thead th { position: sticky; top: 0; z-index: 1; }
+.table-scroll td { white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+
+/* ABOUT */
+.about p { font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
+.about-title { display: flex; align-items: baseline; gap: 8px; }
+.about-title strong { font-size: 20px; color: #89b4fa; }
+.about-full-name { margin-bottom: 12px; }
+.about-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin-bottom: 14px; }
+.about-facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6c7086; }
+.about-facts dd { font-size: 12px; color: #cdd6f4; word-break: break-word; }
+.about-facts dd.diff-warn { color: #f9e2af; }
+.about-facts a { color: #89b4fa; }
+
 .group-chip { cursor: pointer; user-select: none; border-color: #45475a; }
 .group-chip:hover { border-color: #89b4fa; }
 .group-chip.chip-all { background: rgba(166, 227, 161, 0.16); color: #a6e3a1; border-color: #a6e3a1; }

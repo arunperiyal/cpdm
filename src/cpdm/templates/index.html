@@ -39,6 +39,17 @@
         </div>
 
         <div class="nav-item">
+            <button class="nav-btn">Table</button>
+            <div class="dropdown">
+                <div class="dropdown-item" onclick="openTableView('header')">Header</div>
+                <div class="dropdown-item" onclick="openTableView('rows')">Rows</div>
+                <div class="dropdown-item" onclick="openTableView('columns')">Columns</div>
+                <div class="dropdown-item" onclick="openTableView('sort')">Sort</div>
+                <div class="dropdown-item" onclick="openTableView('filter')">Filter</div>
+            </div>
+        </div>
+
+        <div class="nav-item">
             <button class="nav-btn">Scales</button>
             <div class="dropdown">
                 <div class="dropdown-item" onclick="openCreateScaleModal()">Create Scale</div>
@@ -63,6 +74,7 @@
             <div class="dropdown dropdown-wide">
                 <div class="dropdown-item" onclick="openDocsBrowser()">Documentation Browser &#8599;</div>
                 <div class="dropdown-item" onclick="openSamplesModal()">Sample Data Files</div>
+                <div class="dropdown-item" onclick="openAboutModal()">About CPDM</div>
                 {% for section in doc_sections %}
                     {% if section.docs %}
                         <div class="dropdown-heading">{{ section.label }}</div>
@@ -260,6 +272,26 @@
         </div>
     </div>
 
+    <!-- Table: header, rows, columns, sort and filter share this shell -->
+    <div id="modal-table" class="modal">
+        <div class="modal-content modal-tall" style="max-width: 1240px; width: 96%;">
+            <div class="modal-header" id="table-modal-header">Table</div>
+            <div class="modal-body" id="table-modal-body"></div>
+            <div class="modal-footer" id="table-modal-footer"></div>
+        </div>
+    </div>
+
+    <!-- About CPDM -->
+    <div id="modal-about" class="modal">
+        <div class="modal-content" style="max-width: 620px;">
+            <div class="modal-header">About CPDM</div>
+            <div class="modal-body" id="about-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal('modal-about')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Documentation viewer -->
     <div id="modal-docs" class="modal">
         <div class="modal-content" style="max-width: 900px; width: 92%;">
@@ -278,6 +310,7 @@
     <script src="{{ url_for('static', filename='js/text_rules.js') }}"></script>
     <script src="{{ url_for('static', filename='js/groups.js') }}"></script>
     <script src="{{ url_for('static', filename='js/scales.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/table.js') }}"></script>
     <script src="{{ url_for('static', filename='js/compute.js') }}"></script>
     <script src="{{ url_for('static', filename='js/console.js') }}"></script>
     <script src="{{ url_for('static', filename='js/docs.js') }}"></script>

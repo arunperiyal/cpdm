@@ -56,3 +56,72 @@ function openSamplesModal() {
             body.innerHTML = `<p class="log-error">${escapeHtml(error.message)}</p>`;
         });
 }
+
+/* --- About CPDM: a read-only card, no controls beyond Close -------------- */
+
+function openAboutModal() {
+    const body = document.getElementById('about-body');
+    body.innerHTML = '<p class="muted">Reading...</p>';
+    openModal('modal-about');
+
+    apiGet('/api/about')
+        .then(info => { body.innerHTML = renderAbout(info); })
+        .catch(error => {
+            body.innerHTML = `<p class="log-error">${escapeHtml(error.message)}</p>`;
+        });
+}
+
+function renderAbout(info) {
+    const deps = Object.entries(info.dependencies)
+        .map(([name, version]) => version
+            ? `${escapeHtml(name)} ${escapeHtml(version)}`
+            : `<span class="muted">${escapeHtml(name)} — not installed</span>`)
+        .join(' · ');
+
+    const people = info.contributors.map(person =>
+        `<div>${escapeHtml(person.name)} <span class="muted">${escapeHtml(person.email)}</span></div>`
+    ).join('');
+
+    const loaded = info.loaded
+        ? `${escapeHtml(info.loaded.filename)} — ${info.loaded.rows} row(s), ${info.loaded.columns} column(s),
+           ${info.loaded.groups} group(s), ${info.loaded.scales} scale(s)`
+        : 'nothing loaded';
+
+    return `
+        <div class="about">
+            <div class="about-title">
+                <strong>${escapeHtml(info.name)}</strong>
+                <span class="muted">version ${escapeHtml(info.version)}</span>
+            </div>
+            <div class="muted about-full-name">${escapeHtml(info.full_name)}</div>
+
+            <p>${escapeHtml(info.summary)}</p>
+
+            <dl class="about-facts">
+                <dt>Licence</dt>
+                <dd class="${info.licence.declared ? '' : 'diff-warn'}">
+                    ${escapeHtml(info.licence.summary)}
+                </dd>
+
+                <dt>Contributors</dt>
+                <dd>${people}</dd>
+
+                <dt>Source</dt>
+                <dd><a href="${escapeHtml(info.repository)}" target="_blank" rel="noopener">${escapeHtml(info.repository)}</a></dd>
+
+                <dt>Running on</dt>
+                <dd>Python ${escapeHtml(info.python)} · ${escapeHtml(info.platform)}</dd>
+
+                <dt>Built with</dt>
+                <dd>${deps}</dd>
+
+                <dt>Loaded now</dt>
+                <dd>${loaded}</dd>
+            </dl>
+
+            <p class="muted">
+                Everything runs on this machine and nothing is sent anywhere. The workspace
+                holds one dataset at a time, in memory — export before you close it.
+            </p>
+        </div>`;
+}

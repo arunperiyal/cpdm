@@ -199,6 +199,23 @@ class Dataset:
             return self.answers[column]
         return self.df[column] if column in self.df.columns else None
 
+    def sync_answers(self):
+        """Realign the remembered answers after rows are sorted or removed.
+
+        They are Series sharing the dataframe's index, so a filter or a sort
+        has to carry them along or a later re-score would read the wrong rows.
+        """
+        if self.df is None:
+            self.answers = {}
+            return self.answers
+
+        self.answers = {
+            col: series.reindex(self.df.index)
+            for col, series in self.answers.items()
+            if col in self.df.columns
+        }
+        return self.answers
+
     def forget_answers(self, columns=None):
         """Drop remembered answers so the current values are read afresh."""
         if columns is None:

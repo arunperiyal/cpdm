@@ -2,10 +2,16 @@
 
 from flask import Blueprint, jsonify
 
-from cpdm.core import docs_library, samples
+from cpdm.core import about_info, docs_library, samples, state
 from cpdm.web.api.support import api_route
 
 bp = Blueprint("docs_api", __name__, url_prefix="/api")
+
+
+@api_route(bp, "/about", methods=["GET"])
+def about():
+    """What the About box shows: the app, its licence and who wrote it."""
+    return jsonify(about_info.summary(state.session))
 
 
 @api_route(bp, "/docs", methods=["GET"])

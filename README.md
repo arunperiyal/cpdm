@@ -32,6 +32,7 @@ Environment overrides: `CPDM_HOST`, `CPDM_PORT`, `CPDM_DEBUG`, `CPDM_NO_BROWSER`
 ./cpdmctl.sh start                  # run it now, in the background
 ./cpdmctl.sh status                 # is it up, and on what URL
 ./cpdmctl.sh stop
+./cpdmctl.sh update                 # git pull, then restart onto the new code
 
 ./cpdmctl.sh install                # write a systemd unit, enable it, start it
 ./cpdmctl.sh uninstall              # stop, disable and remove that unit
@@ -276,9 +277,13 @@ command `docs` prints links to all of them.
 
 **Sample Data Files** — lists `samples/` with descriptions and download links.
 
-**About CPDM** — a read-only card: what the app is, its version, the licence as the
-repository actually states it, the contributors, what it is running on, and what is
-loaded right now.
+**About CPDM** — a read-only card: what the app is, its version, **the commit it is
+actually running**, the licence as the repository actually states it, the contributors,
+what it is running on, and what is loaded right now. The commit line answers the question
+a hosted copy raises: whether the update you pulled is the code that is serving.
+
+Static files are served with a stamp that changes when the file does, so a browser cannot
+keep running yesterday's JavaScript against today's API.
 
 ### Command console
 

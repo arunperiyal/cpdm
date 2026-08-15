@@ -109,6 +109,9 @@ function renderAbout(info) {
                 <dt>Source</dt>
                 <dd><a href="${escapeHtml(info.repository)}" target="_blank" rel="noopener">${escapeHtml(info.repository)}</a></dd>
 
+                ${info.commit ? `<dt>Code running</dt>
+                <dd><code>${escapeHtml(info.commit)}</code></dd>` : ''}
+
                 <dt>Running on</dt>
                 <dd>Python ${escapeHtml(info.python)} · ${escapeHtml(info.platform)}</dd>
 

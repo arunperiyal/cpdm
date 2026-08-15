@@ -61,6 +61,7 @@ ${BOLD}Commands:${OFF}
   restart        Stop then start
   status         Whether it is running, and on which URL
   logs           Follow the log (journalctl for a service, the log file otherwise)
+  update         git pull, then restart so the new code is the running code
   install        Write the systemd unit, reload, enable at boot, and start
   uninstall      Stop, disable and remove the unit
   url            Print the address the app is served on
@@ -399,6 +400,33 @@ stop_background() {
 }
 
 # --- commands ------------------------------------------------------------
+# A running service keeps the code it started with, so pulling is only half
+# of an update; this does both and shows what moved.
+cmd_update() {
+    command -v git >/dev/null 2>&1 || die "git is not installed."
+    [[ -d "$PROJECT_DIR/.git" ]] || die "$PROJECT_DIR is not a git checkout."
+
+    local before after
+    before="$(git -C "$PROJECT_DIR" rev-parse --short HEAD)"
+
+    say "Pulling into $PROJECT_DIR ..."
+    git -C "$PROJECT_DIR" pull --ff-only || die "Pull failed — sort that out first."
+
+    after="$(git -C "$PROJECT_DIR" rev-parse --short HEAD)"
+    if [[ "$before" == "$after" ]]; then
+        ok "Already up to date at $after."
+    else
+        ok "Updated $before -> $after:"
+        git -C "$PROJECT_DIR" --no-pager log --oneline "$before..$after" | sed 's/^/    /'
+    fi
+
+    say ""
+    cmd_stop || true
+    cmd_start
+    say ""
+    say "If the browser still looks unchanged, reload it with Ctrl+Shift+R once."
+}
+
 cmd_start() {
     if unit_installed; then
         say "Using the systemd unit at $(unit_path)."
@@ -460,7 +488,7 @@ cmd_logs() {
 COMMAND=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        start|stop|restart|status|logs|install|uninstall|url)
+        start|stop|restart|status|logs|install|uninstall|url|update)
             COMMAND="$1" ;;
         --user)      SCOPE="user" ;;
         --system)    SCOPE="system" ;;
@@ -484,6 +512,7 @@ case "$COMMAND" in
     start)     cmd_start ;;
     stop)      cmd_stop ;;
     restart)   cmd_stop; cmd_start ;;
+    update)    cmd_update ;;
     status)    cmd_status ;;
     logs)      cmd_logs ;;
     install)   cmd_install ;;

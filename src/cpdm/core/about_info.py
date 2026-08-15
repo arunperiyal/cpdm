@@ -7,6 +7,7 @@ implying terms nobody has agreed.
 
 import os
 import platform
+import subprocess
 import sys
 from importlib import metadata
 
@@ -48,6 +49,24 @@ def licence():
     }
 
 
+def running_commit():
+    """Which commit this process is actually running.
+
+    After a `git pull` the service keeps running the code it started with, so
+    this is the honest answer to "did my update take effect?".
+    """
+    if not os.path.isdir(os.path.join(PROJECT_ROOT, ".git")):
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", PROJECT_ROOT, "log", "-1", "--format=%h %cs %s"],
+            capture_output=True, text=True, timeout=3, check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout.strip() or None
+
+
 def dependencies():
     """Installed versions, read from package metadata rather than __version__.
 
@@ -78,6 +97,7 @@ def summary(dataset=None):
         "name": NAME,
         "full_name": FULL_NAME,
         "version": __version__,
+        "commit": running_commit(),
         "summary": SUMMARY,
         "repository": REPOSITORY,
         "contributors": CONTRIBUTORS,

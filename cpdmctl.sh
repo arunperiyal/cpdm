@@ -106,7 +106,41 @@ systemctl_do() {
 have_systemd() { command -v systemctl >/dev/null 2>&1; }
 unit_installed() { [[ -f "$(unit_path)" ]]; }
 
-app_url() { printf 'http://%s:%s/' "$HOST" "$PORT"; }
+app_url() {
+    # 0.0.0.0 is what it binds to, not an address anyone can type
+    if [[ "$HOST" == "0.0.0.0" || "$HOST" == "::" ]]; then
+        printf 'http://127.0.0.1:%s/' "$PORT"
+    else
+        printf 'http://%s:%s/' "$HOST" "$PORT"
+    fi
+}
+
+on_lan() { [[ "$HOST" != "127.0.0.1" && "$HOST" != "localhost" && "$HOST" != "::1" ]]; }
+
+lan_addresses() {
+    command -v hostname >/dev/null 2>&1 || return 0
+    hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.' | grep -v '^127\.' || true
+}
+
+# Bound beyond loopback: say who can reach it, and how to let them through.
+report_reach() {
+    on_lan || return 0
+
+    local addr
+    for addr in $(lan_addresses); do
+        say "  reachable at http://$addr:$PORT/"
+    done
+
+    if command -v ufw >/dev/null 2>&1 && sudo -n ufw status 2>/dev/null | grep -q 'Status: active'; then
+        warn "ufw is active — open the port with:  sudo ufw allow $PORT/tcp"
+    elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+        warn "firewalld is active — open the port with:"
+        warn "    sudo firewall-cmd --permanent --add-port=$PORT/tcp && sudo firewall-cmd --reload"
+    fi
+
+    warn "Anyone on this network can open that address. CPDM has no login:"
+    warn "    they can read, change and export whatever dataset is loaded."
+}
 
 python_abs() {
     command -v -- "$PYTHON" 2>/dev/null || printf '%s' "$PYTHON"
@@ -184,11 +218,19 @@ build_argv() {
 
 # --- systemd unit --------------------------------------------------------
 render_unit() {
-    local identity=""
+    local identity="" hardening=""
     if [[ "$SCOPE" == "system" ]]; then
         identity="User=$(id -un)
 Group=$(id -gn)
 "
+        # modest hardening; ProtectHome is deliberately absent because the
+        # project often lives under the user's home directory
+        hardening="NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes"
     fi
 
     cat <<EOF
@@ -201,14 +243,17 @@ Wants=network-online.target
 [Service]
 Type=simple
 ${identity}WorkingDirectory=$PROJECT_DIR
+# the project may live on a drive that mounts after boot starts
+RequiresMountsFor=$PROJECT_DIR
 Environment=CPDM_HOST=$HOST
 Environment=CPDM_PORT=$PORT
 Environment=CPDM_NO_BROWSER=1
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=$PROJECT_DIR/src
 ExecStart=$(exec_start_line)
-Restart=on-failure
+Restart=always
 RestartSec=3
+${hardening}
 # the workspace holds one dataset in memory; never run a second copy of it
 KillMode=mixed
 TimeoutStopSec=20
@@ -323,6 +368,7 @@ start_background() {
     if running_pid >/dev/null && port_busy; then
         ok "Running on $(app_url) (pid $(running_pid))"
         say "  log: $LOG_FILE"
+        report_reach
     else
         rm -f "$PID_FILE"
         die "It did not come up. Last lines of $LOG_FILE:
@@ -380,6 +426,7 @@ cmd_status() {
         say "state:  $state"
         if [[ "$state" == "active" ]]; then
             ok "Serving $(app_url)"
+            report_reach
         else
             warn "Not active. Recent log:"
             systemctl_do status "$UNIT_FILE" --no-pager --lines 8 2>/dev/null || true

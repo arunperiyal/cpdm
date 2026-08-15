@@ -53,10 +53,31 @@ one says which it is using. `logs` follows either the journal or the log file.
 The service always runs **one worker**: CPDM keeps its dataset in the process, so a second
 worker would answer from a different in-memory dataset.
 
+#### Leaving it running
+
+```bash
+./cpdmctl.sh install --linger                    # this machine only
+./cpdmctl.sh install --linger --host 0.0.0.0     # reachable from the LAN
+```
+
+`--linger` runs `loginctl enable-linger`, without which a user service stops when you log
+out. With it, the unit starts at boot and stays up. `--system` is the alternative — no
+linger needed — but a system unit reads the project as your user, so it will not see a
+home directory that is only decrypted at login.
+
+The unit declares `RequiresMountsFor` on the project directory, so a project on a second
+drive waits for that filesystem instead of failing at boot, and `Restart=always` brings it
+back if it ever exits.
+
+When bound past loopback, `start` and `status` list the addresses it is reachable on and
+print the `ufw`/`firewalld` command to open the port.
+
+#### Who can reach it
+
 The default `127.0.0.1` is reachable only from this machine. CPDM has no login and no
-access control, so anyone who can reach the port can read and change the loaded dataset —
-bind it wider only on a network you trust, and put an authenticating reverse proxy in
-front of it otherwise.
+access control, so anyone who can reach the port can read, change and export the loaded
+dataset — bind it wider only on a network you trust. For anything less trusted, keep it on
+loopback and put an authenticating reverse proxy in front.
 
 New to the tool? Download `samples/sample_survey.xlsx` (Help → Sample Data Files) and
 follow [docs/help/01-getting-started.md](docs/help/01-getting-started.md), which is also

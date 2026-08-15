@@ -98,7 +98,7 @@ function tableRefresh(message, kind = 'log-success') {
 /* --- Header ------------------------------------------------------------- */
 
 function renderTableHeader() {
-    const rows = tableUI.columns.map(entry => `
+    const rows = tableUI.columns.map((entry, index) => `
         <div class="form-row" style="align-items:center;">
             <span class="col-index">${entry.position}</span>
             <div style="flex:1; min-width:0;">
@@ -110,7 +110,7 @@ function renderTableHeader() {
                 </span>
             </div>
             <input type="text" value="${escapeHtml(entry.name)}" style="flex:1;"
-                   data-column="${escapeHtml(entry.name)}" oninput="tableEditName(this)">
+                   data-index="${index}" oninput="tableEditName(this)">
         </div>`).join('');
 
     document.getElementById('table-modal-body').innerHTML = `
@@ -132,8 +132,12 @@ function renderTableHeader() {
         <button class="btn btn-primary" onclick="tableApplyRenames()">Apply renames</button>`;
 }
 
+/* Columns are identified by position throughout: a header can hold quotes,
+   newlines or any script, and a name that travels through an HTML attribute
+   and back is not guaranteed to come back byte for byte. */
 function tableEditName(input) {
-    tableUI.renames[input.dataset.column] = input.value;
+    const name = tableUI.columns[Number(input.dataset.index)].name;
+    tableUI.renames[name] = input.value;
 }
 
 function tableApplyRenames() {
@@ -168,7 +172,7 @@ function renderTableRows() {
         return `
             <tr>
                 <td><input type="checkbox" ${tableUI.selectedRows.has(label) ? 'checked' : ''}
-                           onclick="tableToggleRow('${escapeHtml(label)}', this.checked)"></td>
+                           data-index="${index}" onclick="tableToggleRow(this)"></td>
                 <td class="muted">${escapeHtml(label)}</td>
                 ${cells}
             </tr>`;
@@ -209,8 +213,10 @@ function tableGoToPage(offset) {
     loadTablePage(offset).then(renderTableView).catch(reportError);
 }
 
-function tableToggleRow(label, on) {
-    if (on) tableUI.selectedRows.add(label); else tableUI.selectedRows.delete(label);
+function tableToggleRow(checkbox) {
+    const label = tableUI.page.index[Number(checkbox.dataset.index)];
+    if (checkbox.checked) tableUI.selectedRows.add(label);
+    else tableUI.selectedRows.delete(label);
     renderTableView();
 }
 
@@ -266,7 +272,7 @@ function renderTableColumns() {
                 </div>
                 <label class="muted" style="display:flex; align-items:center; gap:6px; margin:0;">
                     <input type="checkbox" ${tableUI.doomed.has(name) ? 'checked' : ''}
-                           onclick="tableToggleDoomed('${escapeHtml(name)}', this.checked)"> delete
+                           data-index="${index}" onclick="tableToggleDoomed(this)"> delete
                 </label>
             </div>`;
     }).join('');
@@ -295,8 +301,9 @@ function tableMoveColumn(index, delta) {
     renderTableView();
 }
 
-function tableToggleDoomed(name, on) {
-    if (on) tableUI.doomed.add(name); else tableUI.doomed.delete(name);
+function tableToggleDoomed(checkbox) {
+    const name = tableUI.order[Number(checkbox.dataset.index)];
+    if (checkbox.checked) tableUI.doomed.add(name); else tableUI.doomed.delete(name);
     renderTableView();
 }
 
@@ -326,17 +333,24 @@ function tableDropColumns() {
 /* --- Sort --------------------------------------------------------------- */
 
 function tableColumnOptions(selected) {
-    return '<option value="">— choose a column —</option>' + tableUI.columns.map(entry =>
-        `<option value="${escapeHtml(entry.name)}" ${entry.name === selected ? 'selected' : ''}>
+    return '<option value="">— choose a column —</option>' + tableUI.columns.map((entry, index) =>
+        `<option value="${index}" ${entry.name === selected ? 'selected' : ''}>
             ${escapeHtml(entry.name)}
          </option>`).join('');
+}
+
+/* '' for the placeholder, otherwise the column name behind that position */
+function tableColumnAt(value) {
+    if (value === '') return '';
+    const entry = tableUI.columns[Number(value)];
+    return entry ? entry.name : '';
 }
 
 function renderTableSort() {
     const rows = tableUI.sortKeys.map((key, index) => `
         <div class="form-row" style="align-items:center; gap:8px;">
             <span class="rule-index">${index + 1}</span>
-            <select style="flex:1;" onchange="tableSetSort(${index}, 'column', this.value)">
+            <select style="flex:1;" onchange="tableSetSort(${index}, 'column', tableColumnAt(this.value))">
                 ${tableColumnOptions(key.column)}
             </select>
             <select onchange="tableSetSort(${index}, 'descending', this.value === 'desc')">
@@ -394,7 +408,7 @@ function renderTableFilter() {
         return `
             <div class="form-row" style="align-items:center; gap:8px; flex-wrap:wrap;">
                 <span class="rule-index">${index + 1}</span>
-                <select style="flex:1; min-width:140px;" onchange="tableSetCondition(${index}, 'column', this.value)">
+                <select style="flex:1; min-width:140px;" onchange="tableSetCondition(${index}, 'column', tableColumnAt(this.value))">
                     ${tableColumnOptions(condition.column)}
                 </select>
                 <select onchange="tableSetCondition(${index}, 'operator', this.value)">

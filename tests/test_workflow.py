@@ -6,6 +6,7 @@
 import io
 import json
 import os
+import re
 import sys
 
 import pandas as pd
@@ -1227,6 +1228,67 @@ def test_table_row_deletion():
 
     blanks = client.post("/api/table/drop_blank_rows", json={}).get_json()["result"]
     assert blanks["removed"] == 0        # the sample has no wholly empty row
+
+
+AWKWARD_HEADER = (
+    '\nDo you consent to participate in this survey? ഈ സർവേയിൽ പങ്കെടുക്കാൻ സമ്മതം ആണോ? '
+    'By ticking "I Agree to Participate", you acknowledge that: (i) You have read it. '
+    '"എനിക്ക് സമ്മതമാണ്" എന്ന് പ്രതികരിക്കുന്നതിലൂടെ. '
+)
+
+
+def test_columns_with_quotes_and_newlines_can_be_edited():
+    """A consent header carries quotes, newlines and two scripts — all of it survives."""
+    client = fresh_client()
+
+    frame = pd.DataFrame({
+        "Timestamp": ["2025-01-01", "2025-01-02"],
+        AWKWARD_HEADER: ["I Agree to Participate", "I Agree to Participate"],
+        "Age": [30, 41],
+    })
+    buffer = io.BytesIO()
+    frame.to_csv(buffer, index=False)
+    buffer.seek(0)
+    client.post("/api/upload", data={"file": (buffer, "consent.csv")},
+                content_type="multipart/form-data")
+
+    report = client.get("/api/table/columns").get_json()["columns"]
+    consent = next(entry for entry in report if "consent" in entry["name"])
+    assert "\n" in consent["name"] and '"' in consent["name"]
+
+    # it can be renamed...
+    renamed = client.post("/api/table/rename",
+                          json={"map": {consent["name"]: "Consent"}}).get_json()
+    assert renamed["result"]["renamed"] == 1
+    assert "Consent" in state.session.df.columns
+
+    # ...and dropped, which is what the checkbox in Table -> Columns asks for
+    dropped = client.post("/api/table/drop_columns",
+                          json={"columns": ["Consent"]}).get_json()["result"]
+    assert dropped["dropped"] == ["Consent"]
+    assert list(state.session.df.columns) == ["Timestamp", "Age"]
+
+
+def test_no_handler_interpolates_a_value_into_javascript():
+    """Guard the bug that made such a column undeletable.
+
+    A name holding a newline or a quote breaks an inline handler built as
+    onclick="fn('${name}')" — the handler stops parsing, so the click does
+    nothing at all. Identify things by index or through a data attribute.
+    """
+    js_dir = os.path.join(PROJECT_ROOT, "src", "cpdm", "static", "js")
+    risky = re.compile(r"""on\w+="[^"]*\('\$\{""")
+
+    offenders = []
+    for name in sorted(os.listdir(js_dir)):
+        if not name.endswith(".js"):
+            continue
+        with open(os.path.join(js_dir, name), encoding="utf-8") as handle:
+            for number, line in enumerate(handle, start=1):
+                if risky.search(line):
+                    offenders.append(f"{name}:{number}: {line.strip()[:90]}")
+
+    assert not offenders, "value interpolated into an inline handler:\n" + "\n".join(offenders)
 
 
 def test_about_reports_what_is_true():

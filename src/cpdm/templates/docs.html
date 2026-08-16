@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% if doc %}{{ doc.title }} — CPDM Docs{% else %}CPDM Documentation{% endif %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/docs.css') }}">
+    <script src="{{ url_for('static', filename='js/prefs.js') }}"></script>
+    <script>applyPrefs();</script>
 </head>
 <body class="docs-page">
 

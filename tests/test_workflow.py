@@ -1291,6 +1291,59 @@ def test_no_handler_interpolates_a_value_into_javascript():
     assert not offenders, "value interpolated into an inline handler:\n" + "\n".join(offenders)
 
 
+STATIC_DIR = os.path.join(PROJECT_ROOT, "src", "cpdm", "static")
+
+
+def _static_files(suffixes=(".css", ".js"), skip=("theme.css",)):
+    for folder in ("css", "js"):
+        directory = os.path.join(STATIC_DIR, folder)
+        for name in sorted(os.listdir(directory)):
+            if name.endswith(suffixes) and name not in skip:
+                with open(os.path.join(directory, name), encoding="utf-8") as handle:
+                    yield name, handle.read()
+
+
+def test_themes_define_every_colour_the_app_asks_for():
+    """A theme is only complete if nothing falls back to an undefined variable."""
+    with open(os.path.join(STATIC_DIR, "css", "theme.css"), encoding="utf-8") as handle:
+        theme = handle.read()
+
+    defined = set(re.findall(r"(--[a-z-]+)\s*:", theme))
+    used = set()
+    for _, text in _static_files():
+        used |= set(re.findall(r"var\((--[a-z-]+)\)", text))
+
+    assert used, "no variables in use — the conversion cannot have run"
+    assert not used - defined, f"undefined: {sorted(used - defined)}"
+
+    # each palette overrides the colours, not the fonts or spacing
+    for palette in ('[data-theme="light"]', '[data-theme="contrast"]'):
+        block = theme.split(palette, 1)[1].split("}", 1)[0]
+        assert "--accent:" in block and "--bg:" in block and "--text:" in block, palette
+
+
+def test_no_hard_coded_palette_outside_the_theme():
+    """Colours must come from the theme, or switching it leaves patches behind."""
+    offenders = []
+    for name, text in _static_files():
+        for number, line in enumerate(text.splitlines(), start=1):
+            if re.search(r"#[0-9a-fA-F]{6}\b", line):
+                offenders.append(f"{name}:{number}: {line.strip()[:80]}")
+
+    assert not offenders, "hard-coded colour outside theme.css:\n" + "\n".join(offenders)
+
+
+def test_both_pages_apply_preferences_before_painting():
+    client = fresh_client()
+    for url in ("/", "/docs/help/getting-started"):
+        page = client.get(url).get_data(as_text=True)
+        head = page.split("</head>", 1)[0]
+        assert "theme.css" in head, url
+        assert "prefs.js" in head and "applyPrefs()" in head, url
+        # the theme must be linked before the stylesheets that consume it
+        assert head.index("theme.css") < head.index("style.css"), url
+
+
 def test_about_reports_what_is_true():
     client = fresh_client()
     info = client.get("/api/about").get_json()

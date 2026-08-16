@@ -7,6 +7,12 @@ function log(msg, type = '') {
     div.className = 'log-entry ' + (type ? 'log-' + type : '');
     div.innerHTML = msg;
     out.appendChild(div);
+
+    // a long session can grow thousands of lines; keep the pane responsive
+    const limit = typeof readPrefs === 'function' ? readPrefs().logLimit : 0;
+    if (limit > 0) {
+        while (out.childElementCount > limit) out.removeChild(out.firstElementChild);
+    }
     out.scrollTop = out.scrollHeight;
 }
 

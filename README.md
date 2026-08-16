@@ -98,6 +98,24 @@ readable in the app at `/docs/help/getting-started`.
 
 Only the first sheet of a workbook is read.
 
+**Preferences** — how the workspace looks and behaves, applied as you choose them and kept
+in the browser rather than on the server, so several people sharing one hosted workspace
+each keep their own:
+
+| | |
+| --- | --- |
+| Theme | Dark, Light, High contrast, or Match the system |
+| Interface font | Default, system UI, serif, monospace, or wide-spaced with plain letterforms |
+| Text size | 11–22px, scaling the whole interface and the docs |
+| Density | Comfortable or Compact |
+| Motion | Full or Reduced (also honoured from the system setting) |
+| Rows per page | What Table → Rows shows at a time |
+| Keep in the log | Trim the output pane so a long session stays quick |
+
+Every colour in the app comes from a variable in `static/css/theme.css`, so a theme is a
+palette swap rather than a stylesheet edit; a test fails if any stylesheet hard-codes a
+colour or uses a variable no palette defines.
+
 ### Clean
 
 **Header Mapping & Value Replacement** — a two-step wizard:
@@ -320,6 +338,7 @@ in the filename controls ordering only; the URL uses the rest of the name.
 | [Console Commands](docs/help/06-console-commands.md) | |
 | [Sample Data](docs/help/07-sample-data.md) | |
 | [The Table Menu](docs/help/08-the-table-menu.md) | |
+| [Preferences](docs/help/09-preferences.md) | |
 
 Adding a page is just adding a `.md` file to `docs/help/` or `docs/theory/` — the sidebar,
 the Help menu and the `docs` command pick it up on the next page load.
@@ -385,9 +404,10 @@ src/cpdm/
         api/                 JSON endpoints: files, cleaning, scales, compute,
                              console, docs (+ support.py for error handling)
     templates/               index.html (workspace), docs.html (reader)
-    static/css/              style.css, docs.css
+    static/css/              theme.css (palettes and typography), style.css, docs.css
     static/js/               core, files, cleaning, text_rules (the trimming
-                             wizard), groups, scales, table, compute, console, docs
+                             wizard), groups, scales, table, compute, console, docs,
+                             prefs
 ```
 
 Core modules take a `Dataset` as their first argument and never import Flask, so they can
@@ -445,7 +465,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Forty-eight end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Fifty-three end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
@@ -463,7 +483,8 @@ the leftovers stage listing, fixing and recording what the rules could not catch
 Table menu (paged rows, the column report, refused rename collisions, reorder and drop,
 sorting keeping every respondent's score with their row, filtering counted before it
 deletes, and row labels staying stable), and the About box reporting the licence the
-repository actually has.
+repository actually has, and the theming contract — every colour coming from a variable
+some palette defines, and both pages applying preferences before the first paint.
 
 ---
 

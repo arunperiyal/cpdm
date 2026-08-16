@@ -297,7 +297,7 @@ function renderTrimmer() {
 
         <div class="trimmer-grid">
             <div class="rule-card">
-                <strong style="color:#89b4fa;">Rules (applied in order)</strong>
+                <strong style="color:var(--accent);">Rules (applied in order)</strong>
                 <div id="trimmer-rules"></div>
                 <button class="btn btn-secondary" style="margin-top:10px; padding:4px 10px; font-size:12px;"
                         onclick="trimmerAddRule()">+ Add rule</button>
@@ -305,7 +305,7 @@ function renderTrimmer() {
 
             <div class="rule-card">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                    <strong style="color:#f38ba8; margin:0;">Apply to columns</strong>
+                    <strong style="color:var(--bad); margin:0;">Apply to columns</strong>
                     <span>
                         <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="trimmerSelectAll(true)">All</button>
                         <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="trimmerSelectAll(false)">None</button>
@@ -481,7 +481,7 @@ function renderTrimmerPreview() {
         <div class="preview-box">
             <div class="preview-head">
                 <div>
-                    <strong style="color:#a6e3a1;">Preview — ${escapeHtml(preview.description)}</strong>
+                    <strong style="color:var(--good);">Preview — ${escapeHtml(preview.description)}</strong>
                     <div class="muted">${summary}. <em>Now</em> is the data as it stands, not as the file arrived.</div>
                 </div>
                 ${toggle}

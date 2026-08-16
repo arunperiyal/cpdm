@@ -12,7 +12,7 @@ const tableUI = {
     noValueOperators: [],
     page: null,         // the current page of rows
     offset: 0,
-    limit: 25,
+    limit: 25,          // replaced by the Preferences value when one is set
     selectedRows: new Set(),
     order: [],          // working copy for Columns
     doomed: new Set(),  // columns ticked for deletion
@@ -35,6 +35,7 @@ const TABLE_TITLES = {
 
 function openTableView(view) {
     withDataset(() => {
+        if (typeof readPrefs === 'function') tableUI.limit = readPrefs().rowsPerPage;
         tableUI.view = view;
         tableUI.selectedRows = new Set();
         tableUI.doomed = new Set();

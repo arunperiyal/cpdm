@@ -431,7 +431,7 @@ function renderScoringStatus(plans) {
             <div class="preview-box">
                 <div class="preview-head">
                     <div>
-                        <strong style="color:#a6e3a1;">${escapeHtml(plan.scale)}</strong>
+                        <strong style="color:var(--good);">${escapeHtml(plan.scale)}</strong>
                         <div class="muted">scores ${plan.score_min}…${plan.score_max}; ${escapeHtml(plan.reversal_note)}</div>
                     </div>
                     <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;"

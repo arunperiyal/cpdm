@@ -1,0 +1,146 @@
+/* Palettes and typography, chosen in File -> Preferences.
+ *
+ * Every colour in the app comes from one of these variables, so a theme is a
+ * matter of swapping the values rather than editing the stylesheets. The dark
+ * palette below is the default; the others override only what differs.
+ *
+ * The theme, font and density live on <html> as data attributes, set before
+ * the first paint by the inline script in the page head so the window never
+ * flashes the wrong colours.
+ */
+
+:root {
+    /* surfaces, from the window down to the sunken panels */
+    --bg: #1e1e2e;
+    --panel: #181825;
+    --sunken: #11111b;
+    --border: #313244;
+    --border-strong: #45475a;
+    --divider: #232334;
+
+    /* text, in three weights of prominence */
+    --text: #cdd6f4;
+    --muted: #a6adc8;
+    --faint: #6c7086;
+    --emphasis: #f5e0dc;
+
+    /* meaning */
+    --accent: #89b4fa;
+    --good: #a6e3a1;
+    --bad: #f38ba8;
+    --warn: #f9e2af;
+
+    --accent-tint: rgba(137, 180, 250, 0.10);
+    --accent-tint-soft: rgba(137, 180, 250, 0.08);
+    --good-tint: rgba(166, 227, 161, 0.16);
+    --bad-tint: rgba(243, 139, 168, 0.15);
+    --warn-tint: rgba(249, 226, 175, 0.14);
+    --warn-tint-soft: rgba(249, 226, 175, 0.08);
+    --shadow: rgba(0, 0, 0, 0.5);
+    --shadow-soft: rgba(0, 0, 0, 0.4);
+    --backdrop: rgba(0, 0, 0, 0.6);
+
+    /* typography */
+    --font-ui: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+    --font-size: 14px;
+
+    /* spacing, tightened by compact density */
+    --pad: 8px;
+    --pad-lg: 15px;
+    --row-pad: 8px;
+}
+
+/* --- light ------------------------------------------------------------- */
+:root[data-theme="light"] {
+    --bg: #eff1f5;
+    --panel: #e6e9ef;
+    --sunken: #dce0e8;
+    --border: #ccd0da;
+    --border-strong: #acb0be;
+    --divider: #dce0e8;
+
+    --text: #4c4f69;
+    --muted: #5c5f77;
+    --faint: #7c7f93;
+    --emphasis: #dc8a78;
+
+    --accent: #1e66f5;
+    --good: #40a02b;
+    --bad: #d20f39;
+    --warn: #a06d17;
+
+    --accent-tint: rgba(30, 102, 245, 0.10);
+    --accent-tint-soft: rgba(30, 102, 245, 0.06);
+    --good-tint: rgba(64, 160, 43, 0.14);
+    --bad-tint: rgba(210, 15, 57, 0.12);
+    --warn-tint: rgba(223, 142, 29, 0.16);
+    --warn-tint-soft: rgba(223, 142, 29, 0.10);
+    --shadow: rgba(76, 79, 105, 0.22);
+    --shadow-soft: rgba(76, 79, 105, 0.16);
+    --backdrop: rgba(76, 79, 105, 0.35);
+}
+
+/* --- high contrast ------------------------------------------------------ */
+:root[data-theme="contrast"] {
+    --bg: #000000;
+    --panel: #0b0b0b;
+    --sunken: #000000;
+    --border: #6b6b6b;
+    --border-strong: #9a9a9a;
+    --divider: #4a4a4a;
+
+    --text: #ffffff;
+    --muted: #e6e6e6;
+    --faint: #c0c0c0;
+    --emphasis: #ffffff;
+
+    --accent: #7cc4ff;
+    --good: #7fff9f;
+    --bad: #ff9aae;
+    --warn: #ffe066;
+
+    --accent-tint: rgba(124, 196, 255, 0.20);
+    --accent-tint-soft: rgba(124, 196, 255, 0.14);
+    --good-tint: rgba(127, 255, 159, 0.20);
+    --bad-tint: rgba(255, 154, 174, 0.20);
+    --warn-tint: rgba(255, 224, 102, 0.22);
+    --warn-tint-soft: rgba(255, 224, 102, 0.14);
+    --shadow: rgba(0, 0, 0, 0.9);
+    --shadow-soft: rgba(0, 0, 0, 0.8);
+    --backdrop: rgba(0, 0, 0, 0.8);
+}
+
+/* --- fonts -------------------------------------------------------------- */
+:root[data-font="system"] {
+    --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+:root[data-font="serif"] {
+    --font-ui: Georgia, 'Times New Roman', serif;
+}
+:root[data-font="mono"] {
+    --font-ui: var(--font-mono);
+}
+:root[data-font="dyslexic"] {
+    /* wider spacing and plain shapes read more easily for some people */
+    --font-ui: Verdana, Tahoma, 'Trebuchet MS', sans-serif;
+    letter-spacing: 0.01em;
+    word-spacing: 0.06em;
+}
+
+/* --- density ------------------------------------------------------------ */
+:root[data-density="compact"] {
+    --pad: 5px;
+    --pad-lg: 10px;
+    --row-pad: 4px;
+}
+
+/* --- motion ------------------------------------------------------------- */
+:root[data-motion="reduced"] * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+}

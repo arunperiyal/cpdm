@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CPDM Workspace</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/docs.css') }}">
+    <script src="{{ url_for('static', filename='js/prefs.js') }}"></script>
+    <script>applyPrefs();</script>   <!-- before the first paint, so no flash -->
 </head>
 <body>
 
@@ -17,6 +20,7 @@
                 <div class="dropdown-item" onclick="triggerFileSelect()">Open (.xlsx / .csv)</div>
                 <div class="dropdown-item" onclick="exportFile('xlsx')">Export (.xlsx)</div>
                 <div class="dropdown-item" onclick="exportFile('csv')">Export (.csv)</div>
+                <div class="dropdown-item" onclick="openPrefsModal()">Preferences</div>
             </div>
         </div>
 
@@ -278,6 +282,18 @@
             <div class="modal-header" id="table-modal-header">Table</div>
             <div class="modal-body" id="table-modal-body"></div>
             <div class="modal-footer" id="table-modal-footer"></div>
+        </div>
+    </div>
+
+    <!-- Preferences -->
+    <div id="modal-prefs" class="modal">
+        <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header">File &#8594; Preferences</div>
+            <div class="modal-body" id="prefs-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" style="margin-right:auto;" onclick="resetPrefs()">Reset to defaults</button>
+                <button class="btn btn-primary" onclick="closeModal('modal-prefs')">Done</button>
+            </div>
         </div>
     </div>
 

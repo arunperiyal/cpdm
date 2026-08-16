@@ -25,7 +25,7 @@ function renderHeaderCleanStep(cols, ignoredCols = []) {
                 <strong>Column Selection &amp; Header Mapping</strong>
                 <span>Uncheck any columns you want to <strong>ignore</strong> during unique value replacement.</span>
             </div>
-            <button class="btn btn-secondary" style="color:#89b4fa; border:1px solid #89b4fa; white-space:nowrap;"
+            <button class="btn btn-secondary" style="color:var(--accent); border:1px solid var(--accent); white-space:nowrap;"
                     onclick="openTextTrimmer()">&#9889; Remove Non-English / Trim Text</button>
         </div>
 
@@ -53,9 +53,9 @@ function renderHeaderCleanStep(cols, ignoredCols = []) {
                            style="cursor:pointer; transform:scale(1.1);"
                            title="Include in unique value replacement">
                 </div>
-                <div class="muted" style="color:#cdd6f4; flex:1; word-break:break-word; max-height:80px; overflow-y:auto;" title="${safe}">${safe}</div>
+                <div class="muted" style="color:var(--text); flex:1; word-break:break-word; max-height:80px; overflow-y:auto;" title="${safe}">${safe}</div>
                 <textarea class="header-clean-input" data-old="${safe}"
-                          style="width:45%; height:60px; font-size:11px; background:#11111b; color:#cdd6f4; border:1px solid #45475a; border-radius:4px; padding:4px; resize:vertical;">${safe}</textarea>
+                          style="width:45%; height:60px; font-size:11px; background:var(--sunken); color:var(--text); border:1px solid var(--border-strong); border-radius:4px; padding:4px; resize:vertical;">${safe}</textarea>
             </div>`;
     });
 
@@ -119,7 +119,7 @@ function renderValueCleanStep(extraIgnoredCols = []) {
                     html += `
                         <div class="form-row" style="align-items:center; margin-bottom:8px; gap:10px;">
                             <div style="flex:1; overflow:hidden;" title="${tooltip}">
-                                <span style="font-size:11px; color:#cdd6f4; display:block; word-break:break-word;">${safe}</span>
+                                <span style="font-size:11px; color:var(--text); display:block; word-break:break-word;">${safe}</span>
                                 <span class="muted">Found in ${item.columns.length} column(s)</span>
                             </div>
                             <input type="text" class="val-clean-input" data-old="${safe}" value="${safe}" style="flex:1;">

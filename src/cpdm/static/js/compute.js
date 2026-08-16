@@ -15,7 +15,7 @@ function openComputeModal() {
                     <input type="checkbox" class="compute-col-chk" id="compute-col-${index}"
                            data-col="${escapeHtml(col)}" checked>
                     <label for="compute-col-${index}">${escapeHtml(col)}
-                        <span style="color:#89b4fa; font-size:11px;">(${escapeHtml(group)})</span>
+                        <span style="color:var(--accent); font-size:11px;">(${escapeHtml(group)})</span>
                     </label>
                 </div>`;
         }).join('');

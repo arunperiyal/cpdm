@@ -311,7 +311,8 @@ keep running yesterday's JavaScript against today's API.
 | `headers [spec]` | The header row as a table — position, name, type, filled/blank, distinct, group, scale — all of it or just the columns named |
 | `info` | Filename, dimensions, ignored columns, groups and scales |
 | `summary` | `describe()` descriptive statistics |
-| `groups` / `scales` | The group tree; the scales and their options |
+| `group [add\|remove] …` | The group tree — `group add - <name> <cols>` for a new group, `group add <root> <name> <cols>` for a subgroup, where the positions count inside the root |
+| `scale [add\|show\|score\|score-type\|remove] …` | Declare a scale on a group, number its items and options, score them and set the keying |
 | `clean rules` | What `clean` can do and what each rule needs |
 | `clean values\|headers <rule> <cols> [arg]` | Apply a cleaning rule to the values or the header text of those columns (`values` may be left out) |
 | `load [file]` / `save [file]` | List or open a file **on the server**, and write the table back out |
@@ -481,7 +482,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Sixty-three end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Sixty-six end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,

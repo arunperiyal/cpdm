@@ -1315,6 +1315,91 @@ def test_console_unique_and_numbered_map():
     assert run_command(fresh, "unique 4,5")["html"].count("distinct value(s)") == 2
 
 
+def test_console_group_command():
+    client = fresh_client()
+    prepared_survey(client)
+
+    top = run_command(client, "group add - Scales WB1:DS4")["output"]
+    assert "created at the top with 9 column(s)" in top
+
+    # inside a group the positions are that group's own
+    sub = run_command(client, "group add Scales Wellbeing 1:5")["output"]
+    assert "created under 'Scales' with 5 column(s)" in sub
+    assert groups.find(state.session, "Wellbeing")["columns"] == [
+        "WB1", "WB2", "WB3", "WB4", "WB5"]
+
+    run_command(client, "group add Scales Stress 6:9")
+    tree = run_command(client, "group")["output"]
+    assert "[Scales] group, 9 column(s)" in tree
+    assert "  - [Wellbeing]" in tree and "  - [Stress]" in tree
+
+    # a column belongs to one group per level, and the move is reported
+    moved = run_command(client, "group add Scales Overlap 1:2")["output"]
+    assert "moved 2 column(s) out of 'Wellbeing'" in moved
+
+    gone = run_command(client, "group remove Scales")["output"]
+    assert "Wellbeing" in gone and "Stress" in gone
+    assert groups.find(state.session, "Scales") is None
+
+    assert "No group named 'Nope'" in run_command(client, "group add Nope X 1:2")["error"]
+    assert "Usage: group add" in run_command(client, "group add -")["error"]
+
+
+def test_console_scale_command():
+    client = fresh_client()
+    prepared_survey(client)
+
+    run_command(client, "group add - Wellbeing WB1:WB5")
+    added = run_command(client, "scale add Wellbeing WEMWBS")["output"]
+    assert "5 item(s)" in added and "5 option(s)" in added
+
+    shown = run_command(client, "scale show WEMWBS")["html"]
+    assert "WB1" in shown and "Direct" in shown
+
+    # the scale need not be named while there is only one of them
+    assert "scores 1" in run_command(client, "scale score 1 1")["output"]
+    assert "scores 5" in run_command(client, "scale score 5 5")["output"]
+
+    typed = run_command(client, "scale score-type 3 reverse")["output"]
+    assert "'WB3' is reverse in 'WEMWBS'" in typed
+    detail = client.get("/api/scales/WEMWBS").get_json()
+    assert [item["type"] for item in detail["items"]][2] == "Reverse"
+
+    # a value of - marks an option missing by design, keeping it out of the range
+    run_command(client, "scale score 2 2")
+    run_command(client, "scale score 2 -")
+    assert client.get("/api/scales/WEMWBS").get_json()["unscored"]
+
+    # with two scales it asks which
+    run_command(client, "group add - Stress DS1:DS4")
+    run_command(client, "scale add Stress GAD")
+    ambiguous = run_command(client, "scale score 1 1")["error"]
+    assert "Which scale?" in ambiguous and "WEMWBS" in ambiguous
+    assert "scores 1" in run_command(client, "scale score GAD 1 1")["output"]
+
+    removed = run_command(client, "scale remove GAD")["output"]
+    assert "group and columns stay" in removed
+    assert state.session.defined_scales == ["WEMWBS"]
+
+    assert "not one of" in run_command(client, "scale wibble")["error"]
+
+
+def test_console_group_and_scale_completion():
+    client = fresh_client()
+    prepared_survey(client)
+    run_command(client, "group add - Wellbeing WB1:WB5")
+    run_command(client, "scale add Wellbeing WEMWBS")
+
+    def complete(line):
+        return client.post("/api/command/complete", json={"line": line}).get_json()["candidates"]
+
+    assert complete("group ") == ["add", "remove", "list"]
+    assert complete("group add ") == ["-", "Wellbeing"]
+    assert complete("scale ") == ["add", "show", "score", "score-type", "remove", "list"]
+    assert complete("scale add ") == ["Wellbeing"]
+    assert complete("scale show ") == ["WEMWBS"]
+
+
 def test_console_replace_scopes():
     client = fresh_client()
     upload(client, "sample_survey.csv")

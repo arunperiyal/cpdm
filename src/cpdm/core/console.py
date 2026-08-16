@@ -184,18 +184,190 @@ def _cmd_info(dataset, _args):
     return {"output": "\n".join(lines) + "\n"}
 
 
-def _cmd_groups(dataset, _args):
-    lines = groups.summary(dataset)
-    if not lines:
-        return {"output": "No field groups yet. Build them in Fields -> Groups.\n"}
-    return {"output": "Field Groups:\n" + "\n".join(lines) + "\n"}
+def _cmd_group(dataset, args):
+    """group | group add <root|-> <name> <columns> | group remove <name>"""
+    if not args or args[0] == "list":
+        lines = groups.summary(dataset)
+        if not lines:
+            return {"output": "No groups yet. 'group add - <name> <columns>' makes one.\n"}
+        return {"output": "Field Groups:\n" + "\n".join(lines) + "\n"}
+
+    action, rest = args[0].lower(), args[1:]
+
+    if action == "add":
+        if len(rest) < 3:
+            raise ValueError("Usage: group add <root|-> <name> <columns>   "
+                             "(use - for a group of its own)")
+        parent = None if rest[0] in ("-", "root") else rest[0]
+        if parent:
+            groups.require(dataset, parent)
+
+        name, spec = rest[1], ",".join(rest[2:])
+        result = groups.create_group(dataset, name, parent=parent, spec=spec)
+
+        held = len(result["group"]["columns"])
+        where = f"under '{parent}'" if parent else "at the top"
+        moved = "".join(
+            f"\n  moved {len(cols)} column(s) out of '{other}'"
+            for other, cols in result["moved"].items()
+        )
+        return {"output": f"[SUCCESS] Group '{name}' created {where} with "
+                          f"{held} column(s).{moved}"}
+
+    if action == "remove":
+        if not rest:
+            raise ValueError("Usage: group remove <name>")
+        removed = groups.delete_group(dataset, " ".join(rest))
+        note = (f" Scale(s) built on them went too: {', '.join(removed['scales'])}."
+                if removed["scales"] else "")
+        return {"output": f"[INFO] Removed: {', '.join(removed['groups'])}. "
+                          f"Their columns are ungrouped again.{note}"}
+
+    raise ValueError(f"'{action}' is not one of: list, add, remove.")
 
 
-def _cmd_scales(dataset, _args):
-    lines = scales.scale_summary(dataset)
-    if not lines:
-        return {"output": "No scales yet. Declare one in Scales -> Create Scale.\n"}
-    return {"output": "Scales:\n" + "\n".join(lines) + "\n"}
+def _which_scale(dataset, args, needed):
+    """Take the scale from the arguments, or from there being only one."""
+    names = dataset.defined_scales
+    if len(args) > needed and args[0] in names:
+        return args[0], args[1:]
+    if len(names) == 1:
+        return names[0], args
+    if not names:
+        raise ValueError("No scales yet. 'scale add <group> <name>' declares one.")
+    raise ValueError("Which scale? Name it first — there are: " + ", ".join(names))
+
+
+def _scale_option_at(detail, token):
+    """An option by its number in `scale show`, or by its label."""
+    options = detail["options"]
+    if token.isdigit():
+        number = int(token)
+        if not 1 <= number <= len(options):
+            raise ValueError(f"'{detail['name']}' has {len(options)} option(s); "
+                             f"there is no number {number}.")
+        return options[number - 1]
+
+    for option in options:
+        if option["label"] == token:
+            return option
+    raise ValueError(f"'{detail['name']}' has no option '{token}'. "
+                     f"'scale show {detail['name']}' lists them.")
+
+
+def _scale_item_at(detail, token):
+    items = detail["items"]
+    if token.isdigit():
+        number = int(token)
+        if not 1 <= number <= len(items):
+            raise ValueError(f"'{detail['name']}' has {len(items)} item(s); "
+                             f"there is no number {number}.")
+        return items[number - 1]
+
+    for item in items:
+        if item["column"] == token:
+            return item
+    raise ValueError(f"'{token}' is not an item of '{detail['name']}'.")
+
+
+def _cmd_scale(dataset, args):
+    """scale | add | show | score | score-type | remove"""
+    if not args or args[0] == "list":
+        lines = scales.scale_summary(dataset)
+        if not lines:
+            return {"output": "No scales yet. 'scale add <group> <name>' declares one.\n"}
+        return {"output": "Scales:\n" + "\n".join(lines) + "\n"}
+
+    action, rest = args[0].lower(), args[1:]
+
+    if action == "add":
+        if not rest:
+            raise ValueError("Usage: scale add <group> [name]")
+        group_name = rest[0]
+        name = " ".join(rest[1:]) or None
+        scale = scales.create_scale(dataset, group_name, name)
+        scored = sum(1 for option in scale["options"] if option["score"] is not None)
+        return {"output": f"[SUCCESS] Scale '{scale['name']}' declared on group "
+                          f"'{group_name}': {len(scale['items'])} item(s), "
+                          f"{len(scale['options'])} option(s) found ({scored} already scored)."}
+
+    if action == "remove":
+        if not rest:
+            raise ValueError("Usage: scale remove <name>")
+        result = scales.delete_scale(dataset, " ".join(rest))
+        note = (f" The answers came back in {len(result['restored'])} column(s)."
+                if result["restored"] else "")
+        return {"output": f"[INFO] Scale removed. Its group and columns stay.{note}"}
+
+    if action == "show":
+        name = " ".join(rest) if rest else _which_scale(dataset, rest, 0)[0]
+        detail = scales.describe(dataset, name)
+
+        items = "".join(
+            f"<tr><td class='muted'>{index}</td><td>{_escape(item['column'])}</td>"
+            f"<td class='muted'>{item['type']}</td></tr>"
+            for index, item in enumerate(detail["items"], start=1)
+        )
+        options = "".join(
+            f"<tr><td class='muted'>{index}</td><td>{_escape(option['label'])}</td>"
+            f"<td class='muted'>{'—' if option['score'] is None else option['score']}</td></tr>"
+            for index, option in enumerate(detail["options"], start=1)
+        )
+        span = ("" if detail["score_min"] is None else
+                f" — scores {detail['score_min']}…{detail['score_max']}, "
+                f"reverse = {detail['score_min'] + detail['score_max']} − value")
+
+        return {"html":
+                f"<strong>{_escape(detail['name'])}</strong> "
+                f"<span class='muted'>from group '{_escape(detail['group'])}'{span}</span>"
+                "<table class='data-table'><thead><tr><th>#</th><th>Item</th><th>Type</th>"
+                f"</tr></thead><tbody>{items}</tbody></table>"
+                "<table class='data-table'><thead><tr><th>#</th><th>Option</th><th>Score</th>"
+                f"</tr></thead><tbody>{options}</tbody></table>"
+                "<span class='muted'>scale score &lt;#|label&gt; &lt;value&gt; · "
+                "scale score-type &lt;#|item&gt; direct|reverse</span>"}
+
+    if action == "score":
+        name, rest = _which_scale(dataset, rest, 2)
+        if len(rest) != 2:
+            raise ValueError("Usage: scale score [<scale>] <#|option> <value>   "
+                             "(a value of - means missing)")
+
+        detail = scales.describe(dataset, name)
+        option = _scale_option_at(detail, rest[0])
+        score = None if rest[1] in ("-", "blank", "none") else rest[1]
+
+        updated = [
+            {"label": entry["label"],
+             "score": score if entry["label"] == option["label"] else entry["score"]}
+            for entry in detail["options"]
+        ]
+        after = scales.set_options(dataset, name, updated)
+        shown = "missing" if score is None else score
+        span = ("nothing scored yet" if after["score_min"] is None else
+                f"range {after['score_min']}…{after['score_max']}")
+        return {"output": f"[SUCCESS] '{option['label']}' scores {shown} in '{name}' "
+                          f"({span})."}
+
+    if action in ("score-type", "type"):
+        name, rest = _which_scale(dataset, rest, 2)
+        if len(rest) != 2:
+            raise ValueError("Usage: scale score-type [<scale>] <#|item> direct|reverse")
+
+        detail = scales.describe(dataset, name)
+        item = _scale_item_at(detail, rest[0])
+
+        wanted = rest[1].lower()
+        keying = scales.REVERSE if wanted.startswith("r") else (
+            scales.DIRECT if wanted.startswith("d") else None)
+        if keying is None:
+            raise ValueError("The type is 'direct' or 'reverse'.")
+
+        scales.set_item_types(dataset, name, {item["column"]: keying})
+        return {"output": f"[SUCCESS] '{item['column']}' is {keying.lower()} in '{name}'. "
+                          f"The column was re-scored from the answers."}
+
+    raise ValueError(f"'{action}' is not one of: list, add, show, score, score-type, remove.")
 
 
 def _cmd_summary(dataset, _args):
@@ -620,10 +792,27 @@ COMMAND_ORDER = [(spec["name"], spec) for spec in [
                  "alphabetically."),
     _spec("summary", _cmd_summary, "Looking", "summary",
           "Count, mean, spread and quartiles for the numeric columns"),
-    _spec("groups", _cmd_groups, "Looking", "groups",
-          "The group and subgroup tree, and the scale each group backs"),
-    _spec("scales", _cmd_scales, "Looking", "scales",
-          "Each scale with its items and its scored options"),
+    _spec("group", _cmd_group, "Fields and scales", "group [add|remove] …",
+          "The group tree, and how to add to it",
+          detail="<code>group</code> alone prints the tree.<br>"
+                 "<code>group add - Wellbeing 8:12</code> makes a group of its own from "
+                 "those columns; <code>-</code> is what says <em>top level</em>.<br>"
+                 "<code>group add Scales PHQ 1:4</code> makes a subgroup of Scales, and "
+                 "the positions count <strong>within Scales</strong> — its first four "
+                 "columns, not the table's.<br>"
+                 "<code>group remove <name></code> takes it and anything under it away; "
+                 "the columns stay."),
+    _spec("scale", _cmd_scale, "Fields and scales", "scale [add|show|score|…] …",
+          "Declare a scale on a group, and say what its answers are worth",
+          detail="<code>scale add Wellbeing WEMWBS</code> declares it — the name is "
+                 "optional and defaults to the group's.<br>"
+                 "<code>scale show WEMWBS</code> numbers its items and its options.<br>"
+                 "<code>scale score 2 4</code> gives option 2 a score of 4; a value of "
+                 "<code>-</code> means missing by design, which keeps it out of the "
+                 "range.<br>"
+                 "<code>scale score-type 3 reverse</code> flips item 3.<br>"
+                 "The scale need only be named when there is more than one: "
+                 "<code>scale score WEMWBS 2 4</code>. Scoring is applied as you go."),
 
     _spec("load", _cmd_load, "Files", "load [file]",
           "List the files on this machine, or open one", needs_data=False,
@@ -671,7 +860,8 @@ COMMAND_ORDER = [(spec["name"], spec) for spec in [
 ]]
 
 #: older names kept working, and listed under the command they point at
-ALIASES = {"show": "head", "columns": "headers"}
+ALIASES = {"show": "head", "columns": "headers",
+           "groups": "group", "scales": "scale"}
 
 COMMANDS = {name: spec for name, spec in COMMAND_ORDER}
 COMMANDS.update({alias: COMMANDS[target] for alias, target in ALIASES.items()})
@@ -727,6 +917,24 @@ def _candidates_for(dataset, tokens):
 
     if command in ("headers", "columns"):
         return _column_names(dataset) if not rest else []
+
+    if command in ("group", "groups"):
+        if not rest:
+            return ["add", "remove", "list"]
+        if rest[0] == "add" and len(rest) == 1:
+            return ["-"] + [group["name"] for group in dataset.groups]
+        if rest[0] == "remove" and len(rest) == 1:
+            return [group["name"] for group in dataset.groups]
+        return []
+
+    if command in ("scale", "scales"):
+        if not rest:
+            return ["add", "show", "score", "score-type", "remove", "list"]
+        if rest[0] == "add" and len(rest) == 1:
+            return [group["name"] for group in dataset.groups]
+        if rest[0] in ("show", "remove", "score", "score-type") and len(rest) == 1:
+            return list(dataset.defined_scales)
+        return []
 
     if command == "help":
         return sorted(COMMANDS) if not rest else []

@@ -92,6 +92,31 @@ clean headers cut 1:17 /           # the same to the header text
 
 `values` may be left out — `clean cut 8:16 /` means the same thing. Several delimiters can follow the rule: `clean values cut 8:16 / ( -` cuts at whichever comes first. These are the same rules as [Clean → Remove Non-English](/docs/help/cleaning-workflow), without the preview — so check with `head` afterwards.
 
+## Groups and scales
+
+```
+group add - Scales 8:16          # a group of its own from columns 8 to 16
+group add Scales Wellbeing 1:5   # a subgroup — 1:5 counts inside Scales
+group add Scales Stress 6:9
+group remove Scales              # and everything under it
+```
+
+`-` in the first place means **top level**; anything else names the group to nest under. Inside a group the positions are that group's own, exactly as in the Fields → Groups editor, so `1:5` there is the group's first five columns rather than the table's. A column belongs to one group per level, so adding it to a second one moves it, and the move is reported.
+
+```
+scale add Wellbeing WEMWBS       # declare it; the name defaults to the group's
+scale show WEMWBS                # numbered items and options
+scale score 1 1                  # option 1 is worth 1
+scale score 5 5
+scale score 6 -                  # "not applicable": missing, and out of the range
+scale score-type 3 reverse       # item 3 is reverse-keyed
+scale remove WEMWBS              # the group and the answers stay
+```
+
+`scale show` numbers the items and the options; `scale score` and `scale score-type` take those numbers, or the label and the column name if you prefer to type them out. Scoring is applied as you go, and is recomputed from the answers each time, so a correction is just another `scale score`.
+
+**The scale only needs naming when there is more than one.** With a single scale declared, `scale score 2 4` is unambiguous; with several, CPDM asks which and lists them, and `scale score WEMWBS 2 4` answers it.
+
 ## Changing one thing
 
 ```

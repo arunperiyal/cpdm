@@ -17,35 +17,63 @@ from cpdm.core import (cleaning, column_spec, docs_library, groups, scales, tabl
                        tabular_io, text_rules, workspace_files)
 from cpdm.core.dataset import SCALE_PREFIX
 
-HELP_TEXT = """Available Commands:
- - head [n] / tail [n]         : First or last n rows (5 by default)
- - headers [n | a:b]           : The header row, all of it or a position/range
- - info                        : Dataset shape, groups and scales
- - groups                      : The field group / subgroup tree
- - scales                      : The scales and the groups they read
- - summary                     : Descriptive statistics
- - load [file]                 : List the data folder, or open a file from it
- - save [file]                 : Write the table back out, beside the data
- - clean rules                 : What `clean` can do, and what each rule needs
- - clean <rule> <cols> [arg]   : Apply a cleaning rule to those columns
- - clean headers <rule> <cols> : The same, to the header text
- - map headers <n> <name>      : Rename the column at position n
- - map values <n> "old" "new"  : Replace a whole answer, in that column only
- - replace "old" "new"         : Substring replacement across all active columns
- - docs                        : The Theory & Help documentation pages
- - clear                       : Clears the output pane
- - help                        : This list
-
- Anything after # is a comment.   Columns: 7, 7:15, a name, or WB*"""
-
-
 def _escape(text):
     """Console output is injected as HTML, so anything from the data is escaped."""
     return (str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def _cmd_help(_dataset, _args):
-    return {"output": HELP_TEXT}
+def _cmd_help(_dataset, args):
+    """help          : every command, grouped
+       help <name>   : what one command does, in full"""
+    if args:
+        return _help_for(args[0].lower())
+
+    sections = []
+    for section in HELP_SECTIONS:
+        rows = "".join(
+            f"<div class='help-usage'><code>{_escape(spec['usage'])}</code></div>"
+            f"<div>{spec['summary']}</div>"
+            for name, spec in COMMAND_ORDER if spec["section"] == section
+        )
+        sections.append(f"<div class='help-section'>{section}</div>"
+                        f"<div class='help-grid'>{rows}</div>")
+
+    return {"html":
+            "<div class='help'>"
+            f"<div class='help-head'>{len(COMMAND_ORDER)} commands — "
+            "<code>help &lt;name&gt;</code> for one of them in full</div>"
+            + "".join(sections) +
+            "<div class='help-foot'>"
+            "<strong>#</strong> starts a comment, unless it is inside quotes. "
+            "<strong>Tab</strong> completes commands, rules, column names and files. "
+            "<strong>↑ ↓</strong> walk back through what you have typed.<br>"
+            "Columns are given as a position <code>7</code>, a range <code>7:15</code>, "
+            "a name, or a pattern <code>WB*</code> — <code>headers</code> prints the positions."
+            "</div></div>"}
+
+
+def _help_for(name):
+    spec = COMMANDS.get(name)
+    if spec is None:
+        close = [known for known in sorted(COMMANDS) if known.startswith(name[:2])]
+        hint = f" Did you mean: {', '.join(close)}?" if close else ""
+        return {"error": f"No command called '{name}'. Type 'help' for the list.{hint}"}
+
+    aliases = [other for other, target in ALIASES.items() if target == spec["name"]]
+    detail = spec.get("detail") or ""
+
+    return {"html":
+            "<div class='help'>"
+            f"<div class='help-head'><code>{_escape(spec['usage'])}</code></div>"
+            f"<p>{spec['summary']}.</p>"
+            + (f"<p>{detail}</p>" if detail else "")
+            + (f"<div class='help-foot'>Also answers to: <code>"
+               + "</code>, <code>".join(sorted(aliases)) + "</code></div>" if aliases else "")
+            + "</div>"}
+
+
+def _cmd_clear(_dataset, _args):
+    return {"clear": True}
 
 
 def _cmd_docs(_dataset, _args):
@@ -370,28 +398,84 @@ def _cmd_replace(dataset, args):
     }
 
 
-# name -> (handler, needs a loaded dataset)
-COMMANDS = {
-    "help": (_cmd_help, False),
-    "docs": (_cmd_docs, False),
-    "head": (_cmd_head, True),
-    "show": (_cmd_head, True),          # what it was called before
-    "tail": (_cmd_tail, True),
-    "headers": (_cmd_headers, True),
-    "columns": (_cmd_headers, True),    # likewise
-    "info": (_cmd_info, True),
-    "groups": (_cmd_groups, True),
-    "scales": (_cmd_scales, True),
-    "summary": (_cmd_summary, True),
-    "clean": (_cmd_clean, True),
-    "load": (_cmd_load, False),         # loading is how a dataset arrives
-    "save": (_cmd_save, True),
-    "map": (_cmd_map, True),
-    "replace": (_cmd_replace, True),
-}
+HELP_SECTIONS = ("Looking", "Files", "Cleaning", "Editing", "The session")
 
 
-# --- completion -----------------------------------------------------------
+def _spec(name, handler, section, usage, summary, needs_data=True, detail=None):
+    return {"name": name, "handler": handler, "needs_data": needs_data,
+            "section": section, "usage": usage, "summary": summary, "detail": detail}
+
+
+#: the commands, in the order help prints them
+COMMAND_ORDER = [(spec["name"], spec) for spec in [
+    _spec("head", _cmd_head, "Looking", "head [n]",
+          "The first n rows, five by default",
+          detail="<code>head 20</code> shows twenty. The heading says how many of how "
+                 "many, so a mistyped count is obvious."),
+    _spec("tail", _cmd_tail, "Looking", "tail [n]",
+          "The last n rows, five by default"),
+    _spec("headers", _cmd_headers, "Looking", "headers [columns]",
+          "The header row: position, type, how full, group and scale",
+          detail="With no argument it lists every column. Give it a position, a range or "
+                 "a pattern to narrow it: <code>headers 8:12</code>, <code>headers WB*</code>. "
+                 "The positions it prints are what the other commands take."),
+    _spec("info", _cmd_info, "Looking", "info",
+          "File name, size, ignored columns, groups and scales"),
+    _spec("summary", _cmd_summary, "Looking", "summary",
+          "Count, mean, spread and quartiles for the numeric columns"),
+    _spec("groups", _cmd_groups, "Looking", "groups",
+          "The group and subgroup tree, and the scale each group backs"),
+    _spec("scales", _cmd_scales, "Looking", "scales",
+          "Each scale with its items and its scored options"),
+
+    _spec("load", _cmd_load, "Files", "load [file]",
+          "List the files on this machine, or open one", needs_data=False,
+          detail="These are files where CPDM is running, not on the computer whose browser "
+                 "is open — File → Open is the one that uploads from there. Reading and "
+                 "writing stay inside the data folder and the read-only samples; a name "
+                 "that points outside them is refused."),
+    _spec("save", _cmd_save, "Files", "save [file]",
+          "Write the table back out beside the data",
+          detail="Without a name it writes <code>processed_&lt;file&gt;.xlsx</code>. The "
+                 "extension chooses the format: <code>.xlsx</code> or <code>.csv</code>."),
+
+    _spec("clean", _cmd_clean, "Cleaning", "clean rules | values | headers …",
+          "Apply a trimming rule to the values or the header text",
+          detail="<code>clean rules</code> lists the rules and what each one needs.<br>"
+                 "<code>clean values cut 8:16 /</code> cuts those columns at the first "
+                 "slash; <code>clean headers cut 1:17 /</code> does the same to the header "
+                 "text. The word <em>values</em> may be left out.<br>"
+                 "Several delimiters may follow a rule — <code>clean values cut 8:16 / ( -</code> "
+                 "cuts at whichever comes first. These are the rules from Clean → Remove "
+                 "Non-English, without its preview, so check with <code>head</code> after."),
+
+    _spec("map", _cmd_map, "Editing", 'map headers|values …',
+          "Change one header, or one answer in one column",
+          detail="<code>map headers 3 Age</code> renames the third column.<br>"
+                 "<code>map values 4 \"old\" \"new\"</code> replaces an answer in that "
+                 "column only, matched <strong>whole</strong>; if nothing matches it says "
+                 "what the column does hold, which is usually a tail nobody has trimmed."),
+    _spec("replace", _cmd_replace, "Editing", 'replace "old" "new"',
+          "Substring replacement across every active text column",
+          detail="The blunt instrument: it matches anywhere inside a cell, in every column "
+                 "at once. For one answer in one column use <code>map values</code>; for "
+                 "coding a scale use Scales → Assign Scoring."),
+
+    _spec("docs", _cmd_docs, "The session", "docs",
+          "Links to every Theory and Help page", needs_data=False),
+    _spec("help", _cmd_help, "The session", "help [command]",
+          "This list, or one command in full", needs_data=False),
+    _spec("clear", _cmd_clear, "The session", "clear",
+          "Empty the output pane", needs_data=False),
+]]
+
+#: older names kept working, and listed under the command they point at
+ALIASES = {"show": "head", "columns": "headers"}
+
+COMMANDS = {name: spec for name, spec in COMMAND_ORDER}
+COMMANDS.update({alias: COMMANDS[target] for alias, target in ALIASES.items()})
+
+
 def _split_for_completion(line):
     """Tokens so far, and the partial token being typed (empty after a space)."""
     try:
@@ -434,6 +518,9 @@ def _candidates_for(dataset, tokens):
 
     if command in ("headers", "columns"):
         return _column_names(dataset) if not rest else []
+
+    if command == "help":
+        return sorted(COMMANDS) if not rest else []
 
     if command == "load":
         return [entry["name"] for entry in workspace_files.listing()] if not rest else []
@@ -481,17 +568,18 @@ def execute(dataset, command):
 
     if not parts:                        # the whole line was a comment
         return {"output": ""}
-    if parts[0].lower() == "clear":
-        return {"clear": True}
 
     name, args = parts[0].lower(), parts[1:]
-    entry = COMMANDS.get(name)
-    if entry is None:
-        return {"error": f"Unknown command '{command}'. Type 'help' for options."}
+    spec = COMMANDS.get(name)
+    if spec is None:
+        close = [known for known in sorted(COMMANDS) if known.startswith(name[:2])]
+        hint = f" Did you mean: {', '.join(close)}?" if close else ""
+        return {"error": f"Unknown command '{name}'. Type 'help' for the list.{hint}"}
 
-    handler, needs_data = entry
-    if needs_data and dataset.df is None:
-        return {"error": "No dataset loaded. Open a data file first."}
+    handler = spec["handler"]
+    if spec["needs_data"] and dataset.df is None:
+        return {"error": "No dataset loaded. Use 'load' to open one, "
+                         "or File -> Open to upload it."}
 
     try:
         return handler(dataset, args)

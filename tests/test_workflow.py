@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sys
+from html import escape
 
 import pandas as pd
 
@@ -158,9 +159,33 @@ def test_ignored_column_survives_rename():
     assert "REDACTED" not in set(state.session.df["Name"])
 
 
+def test_console_help():
+    client = fresh_client()
+
+    listing = run_command(client, "help")["html"]
+    assert "15 commands" in listing
+    for section in ("Looking", "Files", "Cleaning", "Editing", "The session"):
+        assert f">{section}</div>" in listing
+    for usage in ("head [n]", "headers [columns]", "load [file]", 'replace "old" "new"'):
+        assert escape(usage) in listing or usage in listing
+
+    # one command in full, with its aliases named
+    detail = run_command(client, "help head")["html"]
+    assert "five by default" in detail and "show" in detail
+
+    assert "clean rules" in run_command(client, "help clean")["html"]
+
+    unknown = run_command(client, "help nope")["error"]
+    assert "No command called 'nope'" in unknown
+
+    # a near miss on an unknown command suggests the neighbours
+    mistyped = run_command(client, "heade")["error"]
+    assert "Did you mean" in mistyped and "headers" in mistyped
+
+
 def test_console_commands():
     client = fresh_client()
-    assert "Available Commands" in client.post("/api/command", json={"command": "help"}).get_json()["output"]
+    assert "commands" in client.post("/api/command", json={"command": "help"}).get_json()["html"]
     assert client.post("/api/command", json={"command": "show"}).get_json()["error"]
 
     upload(client, "sample_survey.csv")
@@ -1236,8 +1261,10 @@ def test_console_completion():
     assert complete("he")["candidates"] == ["head", "headers", "help"]
     assert complete("he")["common"] == "he"
 
-    # a unique match is offered whole
-    assert complete("cle")["candidates"] == ["clean"]
+    # a unique match is offered whole; an ambiguous one only as far as they agree
+    assert complete("sum")["candidates"] == ["summary"]
+    assert complete("cle")["candidates"] == ["clean", "clear"]
+    assert complete("cle")["common"] == "clea"
 
     # the first level of clean, then its rules, then the columns
     assert set(complete("clean ")["candidates"]) >= {"rules", "headers", "values", "cut", "tidy"}
@@ -1250,6 +1277,7 @@ def test_console_completion():
     assert "Timestamp" in complete("map values ")["candidates"]
     assert "sample_survey.csv" in complete("load ")["candidates"]
     assert complete("summary ")["candidates"] == []
+    assert "clean" in complete("help ")["candidates"]
 
 
 def test_console_map_command():

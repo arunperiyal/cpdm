@@ -319,6 +319,7 @@ keep running yesterday's JavaScript against today's API.
 | `map values <n> "old" "new"` | Replace a whole answer, in that column only |
 | `replace "old" "new"` | Substring replacement across active text columns |
 | `docs` | Links to every documentation page |
+| `help [command]` | The list, grouped by purpose — or one command in full |
 | `clear` | Clears the output pane |
 
 Anything after `#` is a comment; a `#` inside quotes belongs to the data. Columns are named
@@ -478,7 +479,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Sixty end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Sixty-one end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,

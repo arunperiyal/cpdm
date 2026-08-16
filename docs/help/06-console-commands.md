@@ -2,6 +2,8 @@
 
 The prompt at the bottom of the workspace takes short commands. Press Enter to run one; the arrow keys walk back through what you have already typed.
 
+`help` lists them grouped by what they are for, and **`help <command>`** explains one in full — its exact usage, the things worth knowing about it, and any older name it still answers to. It is quicker than this page when you only need to check an argument.
+
 Anything after a `#` is a comment, so you can annotate a line, or park a command without deleting it:
 
 ```

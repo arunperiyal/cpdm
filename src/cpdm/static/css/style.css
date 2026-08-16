@@ -295,3 +295,30 @@ select, input[type="text"], input[type="number"] { background: var(--sunken); bo
     font-family: var(--font-mono); background: var(--sunken);
     border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; color: var(--warn);
 }
+
+/* CONSOLE HELP */
+.help { font-family: var(--font-ui); line-height: 1.5; }
+.help-head { color: var(--accent); font-weight: bold; margin-bottom: 10px; }
+.help-section {
+    color: var(--good); font-size: 11px; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin: 12px 0 4px; border-bottom: 1px solid var(--border); padding-bottom: 3px;
+}
+.help-grid {
+    display: grid; grid-template-columns: minmax(180px, max-content) 1fr;
+    gap: 2px 18px; align-items: baseline;
+}
+.help-usage code {
+    font-family: var(--font-mono); color: var(--text);
+    background: var(--sunken); border: 1px solid var(--border);
+    border-radius: 3px; padding: 0 5px; white-space: nowrap;
+}
+.help p { margin: 6px 0; }
+.help code {
+    font-family: var(--font-mono); color: var(--warn);
+    background: var(--sunken); border-radius: 3px; padding: 0 4px;
+}
+.help-foot {
+    margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--border);
+    color: var(--faint); font-size: 12px;
+}

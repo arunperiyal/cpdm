@@ -316,8 +316,10 @@ keep running yesterday's JavaScript against today's API.
 | `clean values\|headers <rule> <cols> [arg]` | Apply a cleaning rule to the values or the header text of those columns (`values` may be left out) |
 | `load [file]` / `save [file]` | List or open a file **on the server**, and write the table back out |
 | `map headers <n> <name>` | Rename the column at position n |
-| `map values <n> "old" "new"` | Replace a whole answer, in that column only |
-| `replace "old" "new"` | Substring replacement across active text columns |
+| `unique <cols>` | The distinct values of each column, numbered, with row counts |
+| `map values <n> unique <#> "new"` | Replace the numbered value from `unique <n>` — no retyping a long answer |
+| `map values <n> ["string"] "old" "new"` | Spell the old value out instead; whole-cell, that column only |
+| `replace all\|<cols> "old" "new"` | Substring replacement, everywhere or in the columns named |
 | `docs` | Links to every documentation page |
 | `help [command]` | The list, grouped by purpose — or one command in full |
 | `clear` | Clears the output pane |
@@ -479,7 +481,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Sixty-one end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Sixty-three end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,

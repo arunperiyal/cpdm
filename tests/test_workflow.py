@@ -163,11 +163,12 @@ def test_console_help():
     client = fresh_client()
 
     listing = run_command(client, "help")["html"]
-    assert "15 commands" in listing
+    assert "16 commands" in listing
     for section in ("Looking", "Files", "Cleaning", "Editing", "The session"):
         assert f">{section}</div>" in listing
-    for usage in ("head [n]", "headers [columns]", "load [file]", 'replace "old" "new"'):
-        assert escape(usage) in listing or usage in listing
+    for usage in ("head [n]", "headers [columns]", "load [file]", "unique <columns>",
+                  'replace all|<columns> "old" "new"'):
+        assert escape(usage, quote=False) in listing, usage
 
     # one command in full, with its aliases named
     detail = run_command(client, "help head")["html"]
@@ -1278,6 +1279,59 @@ def test_console_completion():
     assert "sample_survey.csv" in complete("load ")["candidates"]
     assert complete("summary ")["candidates"] == []
     assert "clean" in complete("help ")["candidates"]
+
+
+def test_console_unique_and_numbered_map():
+    """The numbers unique prints are what map values can be told to use."""
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    listing = run_command(client, "unique 4")["html"]
+    assert "2 distinct value(s)" in listing
+    assert "Female / സ്ത്രീ" in listing and "Male / പുരുഷൻ" in listing
+
+    # the numbering belongs to the column, so it holds without the listing
+    fresh = fresh_client()
+    upload(fresh, "sample_survey.csv")
+    mapped = run_command(fresh, "map values 4 unique 2 Male")["output"]
+    assert "Replaced 'Male / പുരുഷൻ' with 'Male' in 18 cell(s)" in mapped
+
+    # ...and it follows the data: value 2 is now something else
+    assert "Male" in run_command(fresh, "unique 4")["html"]
+
+    # spelling the old value out still works, with or without the keyword
+    assert "12 cell(s)" in run_command(
+        fresh, 'map values 4 string "Female / സ്ത്രീ" "Female"')["output"]
+    assert "18 cell(s)" in run_command(fresh, 'map values 4 "Male" "M"')["output"]
+
+    out_of_range = run_command(fresh, "map values 4 unique 99 x")["error"]
+    assert "there is no number 99" in out_of_range
+
+    assert "Which column" in run_command(fresh, "unique")["error"]
+
+    # several columns at once, space- or comma-separated
+    both = run_command(fresh, "unique 4 5")["html"]
+    assert both.count("distinct value(s)") == 2
+    assert run_command(fresh, "unique 4,5")["html"].count("distinct value(s)") == 2
+
+
+def test_console_replace_scopes():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    one = run_command(client, 'replace 10 "Neutral" "Mid"')["output"]
+    assert "in 1 of" in one
+    assert state.session.df.iloc[:, 9].astype(str).str.contains("Mid").any()
+    assert not state.session.df.iloc[:, 8].astype(str).str.contains("Mid").any()
+
+    every = run_command(client, 'replace all "Agree" "Yes"')["output"]
+    assert "every active text column" in every
+
+    # saying neither still means everywhere, as it always did
+    assert "every active text column" in run_command(
+        client, 'replace "Disagree" "No"')["output"]
+
+    assert "Usage" in run_command(client, "replace one")["error"]
 
 
 def test_console_map_command():

@@ -102,6 +102,73 @@ def column_report(dataset):
     return report
 
 
+MAX_UNIQUE = 200
+
+
+def unique_values(dataset, columns, limit=MAX_UNIQUE):
+    """The distinct values of each column, numbered.
+
+    The numbering is a property of the column, not of the last thing printed:
+    it is recomputed the same way every time, so ``unique 10`` and a later
+    ``map values 10 unique 2`` agree even if other commands ran in between, or
+    the listing was printed in another browser.
+
+    Numbers sort numerically, anything else alphabetically without regard to
+    case, which is the order that is easiest to find a value in.
+    """
+    dataset.require_df()
+
+    report = []
+    for name in columns:
+        if name not in dataset.df.columns:
+            raise ValueError(f"No column named '{name}'.")
+
+        series = dataset.df[name]
+        counts = series.dropna().astype(str).str.strip()
+        counts = counts[counts != ""].value_counts()
+
+        numbers = {label: _as_number(label) for label in counts.index}
+        if counts.index.size and all(value is not None for value in numbers.values()):
+            order = sorted(counts.index, key=lambda label: numbers[label])
+        else:
+            order = sorted(counts.index, key=lambda label: label.lower())
+
+        values = [
+            {"n": position, "value": label, "count": int(counts[label])}
+            for position, label in enumerate(order[:limit], start=1)
+        ]
+        report.append({
+            "column": str(name),
+            "values": values,
+            "distinct": int(counts.index.size),
+            "blank": int(len(series) - counts.sum()),
+            "truncated": counts.index.size > limit,
+        })
+
+    return report
+
+
+def unique_value_at(dataset, column, number):
+    """The nth value of a column's numbered list, as ``unique`` printed it."""
+    listing = unique_values(dataset, [column])[0]
+    for entry in listing["values"]:
+        if entry["n"] == number:
+            return entry["value"]
+
+    raise ValueError(
+        f"'{column}' has {listing['distinct']} distinct value(s); there is no number "
+        f"{number}. Run 'unique' on that column to see the list."
+    )
+
+
+def _as_number(label):
+    try:
+        value = float(label)
+    except (TypeError, ValueError):
+        return None
+    return value
+
+
 # --- the header row -------------------------------------------------------
 def rename_columns(dataset, mapping):
     """Rename columns outright, refusing anything that would collide."""

@@ -120,7 +120,14 @@ def _cmd_tail(dataset, args):
 
 
 def _resolve_columns(dataset, spec):
-    """Turn a console column spec into real column names, or explain why not."""
+    """Turn a console column spec into real column names, or explain why not.
+
+    Separate arguments count as separate items, so `unique 4 5` and
+    `unique 4,5` mean the same. A name holding a space needs quoting, which is
+    what Tab completion does for you.
+    """
+    if isinstance(spec, (list, tuple)):
+        spec = ",".join(spec)
     parsed = column_spec.parse(spec, dataset.df.columns)
     if parsed["unknown"]:
         raise ValueError("No column matches: " + ", ".join(parsed["unknown"]))
@@ -134,7 +141,7 @@ def _cmd_headers(dataset, args):
     report = table.column_report(dataset)
 
     if args:
-        wanted = set(_resolve_columns(dataset, " ".join(args)))
+        wanted = set(_resolve_columns(dataset, args))
         report = [entry for entry in report if entry["name"] in wanted]
 
     rows = "".join(
@@ -290,6 +297,40 @@ def _cmd_clean(dataset, args):
                       f"changed across {result['columns_cleaned']} column(s)."}
 
 
+def _cmd_unique(dataset, args):
+    """unique <columns> : the distinct values of each, numbered"""
+    if not args:
+        raise ValueError("Which column? e.g. unique 10, or unique 8:12")
+
+    columns = _resolve_columns(dataset, args)
+    blocks = []
+
+    for listing in table.unique_values(dataset, columns):
+        rows = "".join(
+            f"<tr><td class='muted'>{entry['n']}</td>"
+            f"<td>{_escape(entry['value'])}</td>"
+            f"<td class='muted'>{entry['count']}</td></tr>"
+            for entry in listing["values"]
+        )
+        note = []
+        if listing["blank"]:
+            note.append(f"{listing['blank']} blank")
+        if listing["truncated"]:
+            note.append(f"showing the first {len(listing['values'])}")
+
+        blocks.append(
+            f"<strong>{_escape(listing['column'])}</strong> — "
+            f"{listing['distinct']} distinct value(s)"
+            + (f" <span class='muted'>({', '.join(note)})</span>" if note else "")
+            + "<table class='data-table'><thead><tr><th>#</th><th>Value</th><th>Rows</th>"
+            f"</tr></thead><tbody>{rows}</tbody></table>"
+        )
+
+    return {"html": "<br>".join(blocks)
+                    + "<span class='muted'>Use the number with: "
+                      "map values &lt;column&gt; unique &lt;#&gt; \"new value\"</span>"}
+
+
 # --- files on the machine running CPDM ------------------------------------
 def _cmd_load(dataset, args):
     """load            : what is there to open
@@ -372,30 +413,178 @@ def _cmd_map(dataset, args):
         return {"output": f"[SUCCESS] Column {rest[0]} renamed to '{new_name}'."
                 if result["renamed"] else "[INFO] That is already its name."}
 
-    if len(rest) != 3:
-        raise ValueError('Usage: map values <n> "old value" "new value"')
+    if len(rest) < 3:
+        raise ValueError('Usage: map values <column> "old" "new"   |   '
+                         'map values <column> unique <#> "new"')
 
     column = _one_column(dataset, rest[0])
-    result = cleaning.replace_whole_cells(dataset, {rest[1]: rest[2]}, [column])
+    how, rest = (rest[1].lower(), rest[2:]) if rest[1].lower() in ("unique", "string") \
+        else ("string", rest[1:])
+
+    if how == "unique":
+        if len(rest) != 2:
+            raise ValueError('Usage: map values <column> unique <#> "new value"')
+        try:
+            number = int(rest[0])
+        except ValueError:
+            raise ValueError(f"'{rest[0]}' is not a number from the unique list.") from None
+        old, new = table.unique_value_at(dataset, column, number), rest[1]
+    else:
+        if len(rest) != 2:
+            raise ValueError('Usage: map values <column> string "old" "new"')
+        old, new = rest[0], rest[1]
+
+    result = cleaning.replace_whole_cells(dataset, {old: new}, [column])
+    if not result["cells_changed"]:
+        # the usual cause is a tail nobody trimmed; show what is really there
+        present = [str(value) for value in dataset.df[column].dropna().unique()[:4]]
+        more = "; ..." if dataset.df[column].nunique() > 4 else ""
+        return {"output": f"[INFO] No cell in '{column}' holds exactly '{old}'. "
+                          f"It holds: {'; '.join(present)}{more}  —  "
+                          f"'unique {rest[0] if how == 'unique' else column}' numbers them for you."}
+
+    return {"output": f"[SUCCESS] Replaced '{old}' with '{new}' in "
+                      f"{result['cells_changed']} cell(s) of '{column}'."}
+
+
+# --- files on the machine running CPDM ------------------------------------
+def _cmd_load(dataset, args):
+    """load            : what is there to open
+       load <file>     : open it"""
+    if not args:
+        files = workspace_files.listing()
+        if not files:
+            return {"output": f"Nothing to load yet. Put .xlsx or .csv files in "
+                              f"{workspace_files.ensure_data_dir()} and try again."}
+        rows = "".join(
+            f"<tr><td>{_escape(entry['name'])}</td>"
+            f"<td class='muted'>{entry['where']}</td>"
+            f"<td class='muted'>{entry['size_kb']} KB</td></tr>"
+            for entry in files
+        )
+        return {"html": f"<strong>{len(files)} file(s) you can load:</strong>"
+                        "<table class='data-table'><thead><tr><th>File</th><th>Where</th>"
+                        f"<th>Size</th></tr></thead><tbody>{rows}</tbody></table>"
+                        f"<span class='muted'>Data folder: {_escape(workspace_files.DATA_DIR)}</span>"}
+
+    path = workspace_files.resolve_readable(" ".join(args))
+    with open(path, "rb") as handle:
+        loaded = tabular_io.load_into(dataset, _Upload(handle, os.path.basename(path)))
+
+    return {"output": f"[SUCCESS] Loaded '{loaded['filename']}' — {loaded['rows']} row(s), "
+                      f"{len(loaded['cols'])} column(s). Anything previously open is closed."}
+
+
+class _Upload:
+    """Enough of a file upload for the reader that expects one."""
+
+    def __init__(self, handle, filename):
+        self._handle = handle
+        self.filename = filename
+
+    def read(self, *args):
+        return self._handle.read(*args)
+
+    def seek(self, *args):
+        return self._handle.seek(*args)
+
+
+def _cmd_save(dataset, args):
+    """save            : write processed_<name> beside the data
+       save <file>     : write that name (.xlsx or .csv)"""
+    default = f"processed_{os.path.splitext(dataset.filename)[0]}.xlsx"
+    name = " ".join(args) if args else default
+    path = workspace_files.resolve_writable(name)
+
+    fmt = "csv" if path.lower().endswith(".csv") else "xlsx"
+    stream, _, _ = tabular_io.export(dataset, fmt)
+    with open(path, "wb") as handle:
+        handle.write(stream.getvalue())
+
+    size = round(os.path.getsize(path) / 1024, 1)
+    return {"output": f"[SUCCESS] Saved {len(dataset.df)} row(s) x "
+                      f"{len(dataset.df.columns)} column(s) to {path} ({size} KB)."}
+
+
+# --- map ------------------------------------------------------------------
+def _one_column(dataset, spec):
+    columns = _resolve_columns(dataset, spec)
+    if len(columns) != 1:
+        raise ValueError(f"'{spec}' matches {len(columns)} columns; name just one.")
+    return columns[0]
+
+
+def _cmd_map(dataset, args):
+    if not args or args[0] not in ("headers", "values"):
+        raise ValueError('Usage: map headers <n> <new name>   |   map values <n> "old" "new"')
+
+    what, rest = args[0], args[1:]
+
+    if what == "headers":
+        if len(rest) < 2:
+            raise ValueError("Usage: map headers <n> <new name>")
+        column = _one_column(dataset, rest[0])
+        new_name = " ".join(rest[1:]).strip()
+        result = table.rename_columns(dataset, {column: new_name})
+        return {"output": f"[SUCCESS] Column {rest[0]} renamed to '{new_name}'."
+                if result["renamed"] else "[INFO] That is already its name."}
+
+    if len(rest) < 3:
+        raise ValueError('Usage: map values <column> "old" "new"   |   '
+                         'map values <column> unique <#> "new"')
+
+    column = _one_column(dataset, rest[0])
+    how, rest = (rest[1].lower(), rest[2:]) if rest[1].lower() in ("unique", "string") \
+        else ("string", rest[1:])
+
+    if how == "unique":
+        if len(rest) != 2:
+            raise ValueError('Usage: map values <column> unique <#> "new value"')
+        try:
+            number = int(rest[0])
+        except ValueError:
+            raise ValueError(f"'{rest[0]}' is not a number from the unique list.") from None
+        old, new = table.unique_value_at(dataset, column, number), rest[1]
+    else:
+        if len(rest) != 2:
+            raise ValueError('Usage: map values <column> string "old" "new"')
+        old, new = rest[0], rest[1]
+
+    result = cleaning.replace_whole_cells(dataset, {old: new}, [column])
     if not result["cells_changed"]:
         # say what is actually there: the usual cause is a tail nobody trimmed
         present = [str(value) for value in dataset.df[column].dropna().unique()[:4]]
-        return {"output": f"[INFO] No cell in '{column}' holds exactly '{rest[1]}'. "
+        return {"output": f"[INFO] No cell in '{column}' holds exactly '{old}'. "
                           f"It holds: " + "; ".join(present)
-                          + ("; ..." if dataset.df[column].nunique() > 4 else "")}
-    return {"output": f"[SUCCESS] Replaced '{rest[1]}' with '{rest[2]}' in "
+                          + ("; ..." if dataset.df[column].nunique() > 4 else "")
+                          + f"  —  'unique {rest[0]}' numbers them for you."
+                          if how == "string" else
+                          f"[INFO] No cell in '{column}' holds exactly '{old}'."}
+    return {"output": f"[SUCCESS] Replaced '{old}' with '{new}' in "
                       f"{result['cells_changed']} cell(s) of '{column}'."}
 
 
 def _cmd_replace(dataset, args):
-    if len(args) != 2:
-        return {"error": 'Invalid syntax. Usage: replace "old text" "new text"'}
-    old_value, new_value = args
-    cleaning.apply_value_replacements(dataset, {old_value: new_value})
-    return {
-        "output": f"[SUCCESS] Replaced '{old_value}' -> '{new_value}' "
-                  "globally across all active text columns."
-    }
+    """replace all "old" "new"       : everywhere
+       replace <columns> "old" "new" : only there
+       replace "old" "new"           : the same as all"""
+    if len(args) == 2:
+        scope, (old_value, new_value) = "all", args
+    elif len(args) == 3:
+        scope, old_value, new_value = args
+    else:
+        raise ValueError('Usage: replace all "old" "new"   |   '
+                         'replace <columns> "old" "new"')
+
+    columns = None if scope.lower() == "all" else _resolve_columns(dataset, scope)
+    changed = cleaning.apply_value_replacements(
+        dataset, {old_value: new_value}, columns
+    )
+
+    where = "every active text column" if columns is None else (
+        f"'{columns[0]}'" if len(columns) == 1 else f"{len(columns)} columns")
+    return {"output": f"[SUCCESS] Replaced '{old_value}' -> '{new_value}' "
+                      f"as a substring in {changed} of {where}."}
 
 
 HELP_SECTIONS = ("Looking", "Files", "Cleaning", "Editing", "The session")
@@ -421,6 +610,14 @@ COMMAND_ORDER = [(spec["name"], spec) for spec in [
                  "The positions it prints are what the other commands take."),
     _spec("info", _cmd_info, "Looking", "info",
           "File name, size, ignored columns, groups and scales"),
+    _spec("unique", _cmd_unique, "Looking", "unique <columns>",
+          "The distinct values of a column, numbered, with how often each occurs",
+          detail="<code>unique 10</code> numbers the answers in that column; "
+                 "<code>unique 8:12</code> does several at once.<br>"
+                 "The numbers are a property of the column, not of the listing, so "
+                 "<code>map values 10 unique 2 \"Agree\"</code> means the same thing "
+                 "however long ago you printed it. Numbers sort numerically, text "
+                 "alphabetically."),
     _spec("summary", _cmd_summary, "Looking", "summary",
           "Count, mean, spread and quartiles for the numeric columns"),
     _spec("groups", _cmd_groups, "Looking", "groups",
@@ -455,11 +652,15 @@ COMMAND_ORDER = [(spec["name"], spec) for spec in [
                  "<code>map values 4 \"old\" \"new\"</code> replaces an answer in that "
                  "column only, matched <strong>whole</strong>; if nothing matches it says "
                  "what the column does hold, which is usually a tail nobody has trimmed."),
-    _spec("replace", _cmd_replace, "Editing", 'replace "old" "new"',
-          "Substring replacement across every active text column",
-          detail="The blunt instrument: it matches anywhere inside a cell, in every column "
-                 "at once. For one answer in one column use <code>map values</code>; for "
-                 "coding a scale use Scales → Assign Scoring."),
+    _spec("replace", _cmd_replace, "Editing", 'replace all|<columns> "old" "new"',
+          "Substring replacement, everywhere or in the columns named",
+          detail="<code>replace all \"old\" \"new\"</code> touches every active text "
+                 "column; <code>replace 8:12 \"old\" \"new\"</code> only those. Saying "
+                 "neither is the same as <em>all</em>.<br>"
+                 "It matches anywhere <em>inside</em> a cell, which is what makes it useful "
+                 "for a stray fragment and dangerous for a whole answer — for one answer "
+                 "use <code>map values</code>, and for coding a scale use "
+                 "Scales → Assign Scoring."),
 
     _spec("docs", _cmd_docs, "The session", "docs",
           "Links to every Theory and Help page", needs_data=False),
@@ -514,7 +715,15 @@ def _candidates_for(dataset, tokens):
             return ["headers", "values"]
         if len(rest) == 1:
             return _column_names(dataset)
+        if len(rest) == 2 and rest[0] == "values":
+            return ["unique", "string"]
         return []
+
+    if command == "unique":
+        return _column_names(dataset) if not rest else []
+
+    if command == "replace":
+        return (["all"] + _column_names(dataset)) if not rest else []
 
     if command in ("headers", "columns"):
         return _column_names(dataset) if not rest else []

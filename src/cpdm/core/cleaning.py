@@ -107,22 +107,30 @@ def _flatten_replacements(dataset, replacements):
     return flat
 
 
-def apply_value_replacements(dataset, replacements):
-    """Replace text literally (not as regex) across every active text column."""
+def apply_value_replacements(dataset, replacements, columns=None):
+    """Replace text literally (not as regex) across text columns.
+
+    ``columns`` narrows it; without one it touches every active text column,
+    which is what the cleaning wizard does.
+    """
     dataset.require_df()
 
     value_map = _flatten_replacements(dataset, replacements)
     if not value_map:
         return 0
 
-    dataset.record_step("value_replacements", map=dict(value_map))
+    dataset.record_step("value_replacements", map=dict(value_map),
+                        columns=list(columns) if columns is not None else None)
 
     # Longest source first: otherwise mapping "Agree" would eat the tail of
     # "Strongly Agree" before its own rule ever runs.
     ordered = sorted(value_map.items(), key=lambda item: len(item[0]), reverse=True)
 
+    targets = dataset.active_columns() if columns is None else [
+        col for col in dataset.df.columns if col in set(columns)]
+
     changed = 0
-    for col in dataset.active_columns():
+    for col in targets:
         if dataset.is_numeric(col):
             continue
 

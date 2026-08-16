@@ -57,7 +57,9 @@ def _replay_steps(dataset, steps):
             )
             headers_changed += len(dataset.cleaning_rules["header_map"]) - len(before)
         elif op == OP_VALUE_REPLACEMENTS:
-            cleaning.apply_value_replacements(dataset, step.get("map", {}))
+            cleaning.apply_value_replacements(
+                dataset, step.get("map", {}), step.get("columns")
+            )
         elif op == OP_EXACT_VALUES:
             result = cleaning.replace_whole_cells(
                 dataset, step.get("map", {}), step.get("columns")

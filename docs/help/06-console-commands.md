@@ -61,6 +61,7 @@ locally.
 | `head [n]` | The first n rows, 5 by default. `show` is the old name and still works. |
 | `tail [n]` | The last n rows. |
 | `headers [spec]` | The header row as a table: position, name, type, filled and blank counts, distinct values, group and scale. With a spec, just those columns. `columns` is the old name. |
+| `unique <spec>` | The distinct values of each column, **numbered**, with how many rows hold each. |
 | `info` | File name, dimensions, ignored columns, group count and the scales. |
 | `summary` | Descriptive statistics for the numeric columns. |
 | `groups` | The group and subgroup tree, and the scale each group backs. |
@@ -93,15 +94,27 @@ clean headers cut 1:17 /           # the same to the header text
 
 ## Changing one thing
 
+```
+unique 4                              # 1  Female / സ്ത്രീ   12
+                                      # 2  Male / പുരുഷൻ     18
+map values 4 unique 2 "Male"          # take number 2, call it Male
+map values 4 string "Female / സ്ത്രീ" "Female"
+map headers 3 Age
+```
+
 | Command | What it does |
 | --- | --- |
 | `map headers <n> <new name>` | Renames the column at position n. Groups, scales and remembered answers follow it. |
-| `map values <n> "old" "new"` | Replaces an answer in that column only, matched **whole**. |
-| `replace "old" "new"` | Substring replacement across every active text column. |
+| `map values <n> unique <#> "new"` | Replaces the numbered value from `unique <n>`, in that column only. |
+| `map values <n> string "old" "new"` | Spells the old value out instead. The word `string` may be left out. |
+| `replace all "old" "new"` | Substring replacement across every active text column. |
+| `replace <spec> "old" "new"` | The same, but only in the columns named. Saying neither `all` nor a spec means `all`. |
 
-`map values` matches the whole cell, so `map values 4 "Male" "M"` does nothing if the cell actually reads `Male / പുരുഷൻ` — and it tells you what the column does hold, which is usually a tail nobody has trimmed yet. `replace` is the blunt instrument: it matches anywhere inside a cell, in every column at once.
+**The numbers `unique` prints belong to the column, not to the listing.** They are worked out afresh each time from the column's own values — sorted numerically if they are numbers, alphabetically otherwise — so `map values 10 unique 2` means the same thing whether you printed the list a second ago or in another browser. They do of course follow the data: once you have renamed value 2, the list is different.
 
-Both are recorded in the cleaning recipe, so they replay on the next wave.
+`map values` matches the **whole cell**, so `map values 4 "Male" "M"` does nothing when the cell actually reads `Male / പുരുഷൻ` — and it says what the column does hold, and points at `unique`. `replace` is the blunt instrument: it matches anywhere *inside* a cell, which is what makes it right for a stray fragment and wrong for a whole answer.
+
+All of these are recorded in the cleaning recipe, so they replay on the next wave.
 
 ## Reading the log
 

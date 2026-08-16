@@ -20,6 +20,9 @@ env/
 # Local Claude Code settings
 .claude/settings.local.json
 
+# The console's data folder: your files, not the project's
+data/
+
 # Exported working files (processed_* is what CPDM writes on export)
 processed_*.xlsx
 processed_*.csv

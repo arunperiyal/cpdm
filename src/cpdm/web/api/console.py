@@ -11,3 +11,9 @@ bp = Blueprint("console_api", __name__, url_prefix="/api")
 @api_route(bp, "/command", methods=["POST"])
 def command():
     return jsonify(console.execute(state.session, payload().get("command", "")))
+
+
+@api_route(bp, "/command/complete", methods=["POST"])
+def complete():
+    """Candidates for the Tab key: the server knows the columns and the files."""
+    return jsonify(console.complete(state.session, payload().get("line", "")))

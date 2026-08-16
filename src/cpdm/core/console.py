@@ -10,9 +10,11 @@ Where a command takes columns it takes the same spec the group editor does:
 a position (``7``), a range (``7:15``), a name, or a glob (``WB*``).
 """
 
+import os
 import shlex
 
-from cpdm.core import cleaning, column_spec, docs_library, groups, scales, table, text_rules
+from cpdm.core import (cleaning, column_spec, docs_library, groups, scales, table,
+                       tabular_io, text_rules, workspace_files)
 from cpdm.core.dataset import SCALE_PREFIX
 
 HELP_TEXT = """Available Commands:
@@ -22,6 +24,8 @@ HELP_TEXT = """Available Commands:
  - groups                      : The field group / subgroup tree
  - scales                      : The scales and the groups they read
  - summary                     : Descriptive statistics
+ - load [file]                 : List the data folder, or open a file from it
+ - save [file]                 : Write the table back out, beside the data
  - clean rules                 : What `clean` can do, and what each rule needs
  - clean <rule> <cols> [arg]   : Apply a cleaning rule to those columns
  - clean headers <rule> <cols> : The same, to the header text
@@ -203,26 +207,37 @@ def _clean_rules_table():
         for name, spec in CLEAN_RULES.items()
     )
     return {"html":
-            "<strong>clean &lt;rule&gt; &lt;columns&gt; [extra]</strong><br>"
+            "<strong>clean values &lt;rule&gt; &lt;columns&gt; [extra]</strong><br>"
             "<table class='data-table'><thead><tr>"
             "<th>Rule</th><th>What it does</th><th>Extra argument</th>"
             "</tr></thead><tbody>" + rows + "</tbody></table>"
-            "Add <strong>headers</strong> first to clean the header text instead of the "
-            "values: <em>clean headers cut 8:16 /</em>"}
+            "<strong>clean headers &lt;rule&gt; &lt;columns&gt;</strong> cleans the header "
+            "text instead. <em>values</em> may be left out: <em>clean cut 8:16 /</em> is "
+            "the same as <em>clean values cut 8:16 /</em>."}
+
+
+CLEAN_TARGETS = ("rules", "headers", "values")
 
 
 def _cmd_clean(dataset, args):
+    """clean rules | clean headers <rule> … | clean values <rule> …"""
     if not args:
-        raise ValueError("Try 'clean rules' to see what it can do.")
+        raise ValueError("Usage: clean rules | clean headers <rule> <cols> [extra] "
+                         "| clean values <rule> <cols> [extra]")
     if args[0] == "rules":
         return _clean_rules_table()
 
     stage = cleaning.STAGE_VALUES
-    if args[0] == "headers":
-        stage, args = cleaning.STAGE_HEADERS, args[1:]
+    if args[0] in ("headers", "values"):
+        stage = cleaning.STAGE_HEADERS if args[0] == "headers" else cleaning.STAGE_VALUES
+        args = args[1:]           # named outright
+    elif args[0] not in CLEAN_RULES:
+        raise ValueError(f"'{args[0]}' is neither a rule nor one of: "
+                         + ", ".join(CLEAN_TARGETS) + ". Try 'clean rules'.")
+    # else: a bare rule name is shorthand for `clean values <rule> …`
 
     if len(args) < 2:
-        raise ValueError("Usage: clean <rule> <columns> [extra]  —  see 'clean rules'.")
+        raise ValueError("Usage: clean values <rule> <columns> [extra]  —  see 'clean rules'.")
 
     name, spec, extra = args[0], args[1], args[2:]
     known = CLEAN_RULES.get(name)
@@ -245,6 +260,65 @@ def _cmd_clean(dataset, args):
                           f"{result['headers_changed']} header(s) changed."}
     return {"output": f"[SUCCESS] {result['description']}: {result['cells_changed']} cell(s) "
                       f"changed across {result['columns_cleaned']} column(s)."}
+
+
+# --- files on the machine running CPDM ------------------------------------
+def _cmd_load(dataset, args):
+    """load            : what is there to open
+       load <file>     : open it"""
+    if not args:
+        files = workspace_files.listing()
+        if not files:
+            return {"output": f"Nothing to load yet. Put .xlsx or .csv files in "
+                              f"{workspace_files.ensure_data_dir()} and try again."}
+        rows = "".join(
+            f"<tr><td>{_escape(entry['name'])}</td>"
+            f"<td class='muted'>{entry['where']}</td>"
+            f"<td class='muted'>{entry['size_kb']} KB</td></tr>"
+            for entry in files
+        )
+        return {"html": f"<strong>{len(files)} file(s) you can load:</strong>"
+                        "<table class='data-table'><thead><tr><th>File</th><th>Where</th>"
+                        f"<th>Size</th></tr></thead><tbody>{rows}</tbody></table>"
+                        f"<span class='muted'>Data folder: {_escape(workspace_files.DATA_DIR)}</span>"}
+
+    path = workspace_files.resolve_readable(" ".join(args))
+    with open(path, "rb") as handle:
+        loaded = tabular_io.load_into(dataset, _Upload(handle, os.path.basename(path)))
+
+    return {"output": f"[SUCCESS] Loaded '{loaded['filename']}' — {loaded['rows']} row(s), "
+                      f"{len(loaded['cols'])} column(s). Anything previously open is closed."}
+
+
+class _Upload:
+    """Enough of a file upload for the reader that expects one."""
+
+    def __init__(self, handle, filename):
+        self._handle = handle
+        self.filename = filename
+
+    def read(self, *args):
+        return self._handle.read(*args)
+
+    def seek(self, *args):
+        return self._handle.seek(*args)
+
+
+def _cmd_save(dataset, args):
+    """save            : write processed_<name> beside the data
+       save <file>     : write that name (.xlsx or .csv)"""
+    default = f"processed_{os.path.splitext(dataset.filename)[0]}.xlsx"
+    name = " ".join(args) if args else default
+    path = workspace_files.resolve_writable(name)
+
+    fmt = "csv" if path.lower().endswith(".csv") else "xlsx"
+    stream, _, _ = tabular_io.export(dataset, fmt)
+    with open(path, "wb") as handle:
+        handle.write(stream.getvalue())
+
+    size = round(os.path.getsize(path) / 1024, 1)
+    return {"output": f"[SUCCESS] Saved {len(dataset.df)} row(s) x "
+                      f"{len(dataset.df.columns)} column(s) to {path} ({size} KB)."}
 
 
 # --- map ------------------------------------------------------------------
@@ -310,9 +384,83 @@ COMMANDS = {
     "scales": (_cmd_scales, True),
     "summary": (_cmd_summary, True),
     "clean": (_cmd_clean, True),
+    "load": (_cmd_load, False),         # loading is how a dataset arrives
+    "save": (_cmd_save, True),
     "map": (_cmd_map, True),
     "replace": (_cmd_replace, True),
 }
+
+
+# --- completion -----------------------------------------------------------
+def _split_for_completion(line):
+    """Tokens so far, and the partial token being typed (empty after a space)."""
+    try:
+        tokens = shlex.split(line, comments=True)
+    except ValueError:                      # an unbalanced quote while typing
+        tokens = line.split()
+
+    if line.endswith((" ", "\t")):
+        return tokens, ""
+    return tokens[:-1], (tokens[-1] if tokens else "")
+
+
+def _column_names(dataset):
+    return [str(col) for col in dataset.df.columns] if dataset.df is not None else []
+
+
+def _candidates_for(dataset, tokens):
+    """What could come next, given the tokens already typed."""
+    if not tokens:
+        return sorted(COMMANDS)
+
+    command, rest = tokens[0].lower(), tokens[1:]
+
+    if command == "clean":
+        if not rest:
+            return list(CLEAN_TARGETS) + sorted(CLEAN_RULES)
+        if rest[0] in ("headers", "values"):
+            return sorted(CLEAN_RULES) if len(rest) == 1 else (
+                _column_names(dataset) if len(rest) == 2 else [])
+        if rest[0] in CLEAN_RULES:
+            return _column_names(dataset) if len(rest) == 1 else []
+        return []
+
+    if command == "map":
+        if not rest:
+            return ["headers", "values"]
+        if len(rest) == 1:
+            return _column_names(dataset)
+        return []
+
+    if command in ("headers", "columns"):
+        return _column_names(dataset) if not rest else []
+
+    if command == "load":
+        return [entry["name"] for entry in workspace_files.listing()] if not rest else []
+
+    if command == "save":
+        if rest or dataset.df is None:
+            return []
+        stem = os.path.splitext(dataset.filename)[0]
+        return [f"processed_{stem}.xlsx", f"processed_{stem}.csv"]
+
+    return []
+
+
+def complete(dataset, line):
+    """Candidates for the token being typed — what the Tab key offers."""
+    tokens, partial = _split_for_completion(line or "")
+    lowered = partial.lower()
+
+    candidates = [
+        candidate for candidate in _candidates_for(dataset, tokens)
+        if candidate.lower().startswith(lowered)
+    ]
+
+    # the common prefix is what Tab can safely fill in without choosing for you
+    shared = os.path.commonprefix(candidates) if candidates else ""
+    return {"prefix": partial, "candidates": candidates[:60],
+            "total": len(candidates), "common": shared}
 
 
 def execute(dataset, command):

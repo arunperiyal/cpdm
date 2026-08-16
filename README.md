@@ -313,7 +313,8 @@ keep running yesterday's JavaScript against today's API.
 | `summary` | `describe()` descriptive statistics |
 | `groups` / `scales` | The group tree; the scales and their options |
 | `clean rules` | What `clean` can do and what each rule needs |
-| `clean <rule> <cols> [arg]` | Apply a cleaning rule to those columns; `clean headers …` for the header text |
+| `clean values\|headers <rule> <cols> [arg]` | Apply a cleaning rule to the values or the header text of those columns (`values` may be left out) |
+| `load [file]` / `save [file]` | List or open a file **on the server**, and write the table back out |
 | `map headers <n> <name>` | Rename the column at position n |
 | `map values <n> "old" "new"` | Replace a whole answer, in that column only |
 | `replace "old" "new"` | Substring replacement across active text columns |
@@ -322,7 +323,13 @@ keep running yesterday's JavaScript against today's API.
 
 Anything after `#` is a comment; a `#` inside quotes belongs to the data. Columns are named
 the same way as in the group editor — `7`, `7:15`, a name, or `WB*` — and `headers` prints
-the positions.
+the positions. **Tab** completes commands, `clean` targets and rules, column names and
+loadable files, filling in a unique match and listing an ambiguous one.
+
+`load` and `save` act on the machine running CPDM, confined to a data folder
+(`CPDM_DATA_DIR`, or `data/` beside the project) plus the read-only `samples/`; a name that
+points outside them is refused. That matters on a hosted copy, where the browser and the
+files are on different machines and nothing asks who is asking.
 
 Arrow-up / arrow-down walk through command history. All output — results, successes and
 errors — is appended to the scrolling log pane.
@@ -471,7 +478,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Fifty-seven end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Sixty end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
@@ -492,7 +499,8 @@ deletes, and row labels staying stable), and the About box reporting the licence
 repository actually has, and the theming contract — every colour coming from a variable
 some palette defines, and both pages applying preferences before the first paint, and the console commands (comments stripped outside quotes, head
 and tail counts, the headers table, clean over a column range, and map matching a whole
-answer in one column).
+answer in one column, the load/save sandbox refusing paths outside the data folder, and
+Tab completion offering the right candidates at each position).
 
 ---
 

@@ -14,7 +14,7 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from cpdm import create_app  # noqa: E402
-from cpdm.core import column_spec, groups, state, text_rules  # noqa: E402
+from cpdm.core import column_spec, groups, state, text_rules, workspace_files  # noqa: E402
 from cpdm.core.markdown_lite import _fallback_render  # noqa: E402
 from cpdm.paths import PROJECT_ROOT  # noqa: E402
 
@@ -1177,10 +1177,79 @@ def test_console_clean_command():
     assert "16 header(s) changed" in headers
     assert "Age" in state.session.df.columns
 
-    assert "No rule called" in run_command(client, "clean nope 1")["error"]
+    assert "neither a rule nor one of" in run_command(client, "clean nope 1")["error"]
     assert "needs a delimiter" in run_command(client, "clean cut 1")["error"]
     assert "takes no extra" in run_command(client, "clean tidy 1 x")["error"]
     assert "clean rules" in run_command(client, "clean")["error"]
+
+
+def test_console_clean_names_its_target():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    # values and headers are said outright...
+    assert "cell(s) changed" in run_command(client, "clean values cut 8:12 /")["output"]
+    assert "header(s) changed" in run_command(client, "clean headers cut 1:17 /")["output"]
+
+    # ...and a bare rule still means values, as it did before
+    assert "cell(s) changed" in run_command(client, "clean cut 13:16 /")["output"]
+
+
+def test_console_load_and_save(tmp_path):
+    client = fresh_client()
+    data_dir = tmp_path / "data"
+    workspace_files.DATA_DIR = str(data_dir)
+
+    try:
+        listing = run_command(client, "load")["html"]
+        assert "sample_survey.csv" in listing and "samples" in listing
+
+        loaded = run_command(client, "load sample_survey.csv")["output"]
+        assert "30 row(s), 17 column(s)" in loaded
+        assert len(state.session.df) == 30
+
+        saved = run_command(client, "save wave1.csv")["output"]
+        assert "Saved 30 row(s)" in saved
+        assert (data_dir / "wave1.csv").is_file()
+
+        # the file just written is offered by load
+        assert "wave1.csv" in run_command(client, "load")["html"]
+
+        # reading and writing stay inside the data folder
+        for attempt in ("load /etc/passwd", "load ../../../etc/passwd", "save ../escape.csv"):
+            assert "outside the data folder" in run_command(client, attempt)["error"], attempt
+
+        assert "Save as .xlsx or .csv" in run_command(client, "save notes.txt")["error"]
+        assert "No file called" in run_command(client, "load nope.csv")["error"]
+    finally:
+        workspace_files.DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+
+
+def test_console_completion():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    def complete(line):
+        return client.post("/api/command/complete", json={"line": line}).get_json()
+
+    assert "headers" in complete("")["candidates"]
+    assert complete("he")["candidates"] == ["head", "headers", "help"]
+    assert complete("he")["common"] == "he"
+
+    # a unique match is offered whole
+    assert complete("cle")["candidates"] == ["clean"]
+
+    # the first level of clean, then its rules, then the columns
+    assert set(complete("clean ")["candidates"]) >= {"rules", "headers", "values", "cut", "tidy"}
+    assert complete("clean values ")["candidates"] == [
+        "cut", "cut-after", "cut-non-english", "strip", "tidy"]
+    assert "Timestamp" in complete("clean values cut ")["candidates"]
+    assert complete("clean values cut Ag")["candidates"] == ["Age / വയസ്സ്"]
+
+    assert complete("map ")["candidates"] == ["headers", "values"]
+    assert "Timestamp" in complete("map values ")["candidates"]
+    assert "sample_survey.csv" in complete("load ")["candidates"]
+    assert complete("summary ")["candidates"] == []
 
 
 def test_console_map_command():

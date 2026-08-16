@@ -24,6 +24,34 @@ Everywhere a command takes columns, it takes the same spec as the group editor:
 
 `headers` prints the positions, so it is the natural first command of any session.
 
+## Completion
+
+**Tab** completes the word you are typing. It knows the commands, the first level of
+`clean`, its rule names, your column names, and the files `load` can open — so `clean v`
+Tab `cut` Tab then Tab again lists the columns to choose from. A unique match is filled in
+whole; an ambiguous one fills in as far as the candidates agree and lists them in the log.
+
+Column names with spaces are quoted for you.
+
+## Files
+
+`load` and `save` act on **the machine running CPDM**, not on the machine whose browser is
+open. They are confined to a data folder — `CPDM_DATA_DIR` if you set it, otherwise
+`data/` beside the project, created on first use — plus the bundled `samples/`, which is
+read-only. A name that tries to climb out of those folders is refused.
+
+| Command | What it does |
+| --- | --- |
+| `load` | Lists what is there to open, from the data folder and the samples |
+| `load <file>` | Opens it, closing whatever was open before |
+| `save` | Writes `processed_<name>.xlsx` into the data folder |
+| `save <file>` | Writes that name; `.xlsx` or `.csv` decides the format |
+
+File → Open and File → Export are the other half of this: they move files between your own
+machine and the workspace through the browser. `load` and `save` are for the files already
+sitting on the server, which is the useful pair when CPDM is hosted rather than run
+locally.
+
 ## Looking
 
 | Command | What it does |
@@ -50,13 +78,16 @@ Everywhere a command takes columns, it takes the same spec as the group editor:
 | `strip` | Remove non-English characters wherever they appear | — |
 | `tidy` | Drop stray brackets and separators, collapse spaces | — |
 
+The first word after `clean` says what it works on:
+
 ```
-clean cut 8:16 /              # the item columns, cut at the first slash
-clean tidy 8:16               # then clear the debris that leaves
-clean headers cut 1:17 /      # the same to the header text
+clean rules                        # the table above
+clean values cut 8:16 /            # the item columns, cut at the first slash
+clean values tidy 8:16             # then clear the debris that leaves
+clean headers cut 1:17 /           # the same to the header text
 ```
 
-Put `headers` first to clean the header row instead of the values. Several delimiters can follow the rule: `clean cut 8:16 / ( -` cuts at whichever comes first. These are the same rules as [Clean → Remove Non-English](/docs/help/cleaning-workflow), without the preview — so check with `head` afterwards.
+`values` may be left out — `clean cut 8:16 /` means the same thing. Several delimiters can follow the rule: `clean values cut 8:16 / ( -` cuts at whichever comes first. These are the same rules as [Clean → Remove Non-English](/docs/help/cleaning-workflow), without the preview — so check with `head` afterwards.
 
 ## Changing one thing
 

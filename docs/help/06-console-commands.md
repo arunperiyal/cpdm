@@ -2,36 +2,80 @@
 
 The prompt at the bottom of the workspace takes short commands. Press Enter to run one; the arrow keys walk back through what you have already typed.
 
+Anything after a `#` is a comment, so you can annotate a line, or park a command without deleting it:
+
+```
+clean cut 8:16 /        # strip the Malayalam from the item columns
+# map values 4 "Male / പുരുഷൻ" "Male"   -- not yet, check the wave 2 file first
+```
+
+A `#` inside quotes belongs to the data, not to a comment, so `map values 1 "day #1" "day one"` works as written.
+
+## Naming columns
+
+Everywhere a command takes columns, it takes the same spec as the group editor:
+
+| You type | You get |
+| --- | --- |
+| `7` | the seventh column |
+| `7:15` | columns 7 to 15 |
+| `Age` | the column of that name, case-insensitively |
+| `WB*` | every column whose name starts with `WB` |
+
+`headers` prints the positions, so it is the natural first command of any session.
+
+## Looking
+
 | Command | What it does |
 | --- | --- |
-| `help` | Lists these commands. |
-| `show` / `head` | Prints the first five rows as a table. |
-| `info` | File name, dimensions, demographic columns, ignored-column count, and every scale with its items. |
-| `groups` | The field group and subgroup tree, indented by depth. |
-| `summary` | Descriptive statistics for the numeric columns (count, mean, sd, min, quartiles, max). |
-| `columns` | Column count, then every column name. |
-| `docs` | Links to the Theory and Help pages. |
-| `replace "old" "new"` | Replaces text globally across all active text columns. |
-| `clear` | Empties the output log. |
+| `head [n]` | The first n rows, 5 by default. `show` is the old name and still works. |
+| `tail [n]` | The last n rows. |
+| `headers [spec]` | The header row as a table: position, name, type, filled and blank counts, distinct values, group and scale. With a spec, just those columns. `columns` is the old name. |
+| `info` | File name, dimensions, ignored columns, group count and the scales. |
+| `summary` | Descriptive statistics for the numeric columns. |
+| `groups` | The group and subgroup tree, and the scale each group backs. |
+| `scales` | Each scale with its items and its scored options. |
+| `docs` | Links to every documentation page. |
+| `clear` | Empties the output pane. |
 
-## `replace` in detail
+## Cleaning
+
+`clean rules` lists what is available and what each rule still needs:
+
+| Rule | What it does | Extra argument |
+| --- | --- | --- |
+| `cut` | Cut at the first delimiter, keeping what comes before it | the delimiter |
+| `cut-after` | Cut at the first delimiter, keeping what comes after it | the delimiter |
+| `cut-non-english` | Cut from the first non-English character to the end | — |
+| `strip` | Remove non-English characters wherever they appear | — |
+| `tidy` | Drop stray brackets and separators, collapse spaces | — |
 
 ```
-replace "Strongly Agree / പൂർണ്ണമായും യോജിക്കുന്നു" "5"
+clean cut 8:16 /              # the item columns, cut at the first slash
+clean tidy 8:16               # then clear the debris that leaves
+clean headers cut 1:17 /      # the same to the header text
 ```
 
-Both arguments must be quoted if they contain spaces, and non-Latin text is fine inside the quotes. The rules are the same as in the cleaning wizard: the replacement is literal (not a regular expression), applies as a substring anywhere in the cell, skips numeric columns, and skips any column you unticked in Clean → Header Mapping.
+Put `headers` first to clean the header row instead of the values. Several delimiters can follow the rule: `clean cut 8:16 / ( -` cuts at whichever comes first. These are the same rules as [Clean → Remove Non-English](/docs/help/cleaning-workflow), without the preview — so check with `head` afterwards.
 
-Unlike the wizard, `replace` does not show you what it is about to change. It is quickest for a fix you have already spotted — a stray spelling, one leftover label.
+## Changing one thing
 
-Everything you do with `replace` is recorded in the cleaning recipe under `_global`, so it is included when you save a cleaning file.
+| Command | What it does |
+| --- | --- |
+| `map headers <n> <new name>` | Renames the column at position n. Groups, scales and remembered answers follow it. |
+| `map values <n> "old" "new"` | Replaces an answer in that column only, matched **whole**. |
+| `replace "old" "new"` | Substring replacement across every active text column. |
+
+`map values` matches the whole cell, so `map values 4 "Male" "M"` does nothing if the cell actually reads `Male / പുരുഷൻ` — and it tells you what the column does hold, which is usually a tail nobody has trimmed yet. `replace` is the blunt instrument: it matches anywhere inside a cell, in every column at once.
+
+Both are recorded in the cleaning recipe, so they replay on the next wave.
 
 ## Reading the log
 
 | Colour | Meaning |
 | --- | --- |
 | Blue | Something started, or a hint. |
-| Green | `[SUCCESS]` — the action completed, usually with a count. |
-| Red | The action failed and nothing was changed. |
+| Green | `[SUCCESS]` — it completed, usually with a count. |
+| Red | It failed and nothing changed. |
 
-Counts in the success lines are worth reading: *"cleaned cell values across 12 column(s)"* tells you whether your exemptions did what you expected.
+Counts are worth reading: *"147 cell(s) changed across 5 column(s)"* tells you whether your column range was the one you meant. The pane trims itself to the number of lines set in [Preferences](/docs/help/preferences).

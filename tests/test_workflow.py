@@ -1113,6 +1113,96 @@ def test_groups_console_command():
     assert "options: 1=1, 2=2, 3=3, 4=4, 5=5" in scales_output
 
 
+def run_command(client, command):
+    return client.post("/api/command", json={"command": command}).get_json()
+
+
+def test_console_comments_and_row_counts():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    assert run_command(client, "# just a note")["output"] == ""
+    assert run_command(client, "   # indented note")["output"] == ""
+
+    # a comment after a command is stripped, and the command still runs
+    assert "First 2 of 30 rows" in run_command(client, "head 2  # only two")["html"]
+    assert "Last 3 of 30 rows" in run_command(client, "tail 3")["html"]
+    assert "First 5 of 30 rows" in run_command(client, "head")["html"]
+    assert "First 5 of 30 rows" in run_command(client, "show")["html"]
+
+    assert "not a number of rows" in run_command(client, "head lots")["error"]
+    assert run_command(client, "head 0")["error"]
+
+    # a hash inside quotes belongs to the data, not to a comment
+    client.post("/api/table/rename", json={"map": {"Timestamp": "When"}})
+    replaced = run_command(client, 'map values 1 "2025-03-01 9:00:00" "day #1"')
+    assert replaced["output"].startswith("[SUCCESS]")
+    assert "day #1" in list(state.session.df["When"])
+
+
+def test_console_headers_command():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    every = run_command(client, "headers")["html"]
+    assert "17 of 17 column(s)" in every
+
+    one = run_command(client, "headers 3")["html"]
+    assert "1 of 17 column(s)" in one and "number" in one          # Age is numeric
+
+    span = run_command(client, "headers 3:5")["html"]
+    assert "3 of 17 column(s)" in span
+
+    # the old name still answers, so existing notes and habits keep working
+    assert "17 of 17" in run_command(client, "columns")["html"]
+
+    assert "No column matches" in run_command(client, "headers 99")["error"]
+
+
+def test_console_clean_command():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    rules = run_command(client, "clean rules")["html"]
+    for name in ("cut", "cut-after", "cut-non-english", "strip", "tidy"):
+        assert f"<strong>{name}</strong>" in rules
+
+    # values of the five wellbeing items only
+    cleaned = run_command(client, "clean cut 8:12 /")["output"]
+    assert "147 cell(s) changed across 5 column(s)" in cleaned
+    assert state.session.df.iloc[0, 7] == "Strongly Agree"
+    assert "/" in str(state.session.df.iloc[0, 12])      # DS1 untouched
+
+    headers = run_command(client, "clean headers cut 1:17 /")["output"]
+    assert "16 header(s) changed" in headers
+    assert "Age" in state.session.df.columns
+
+    assert "No rule called" in run_command(client, "clean nope 1")["error"]
+    assert "needs a delimiter" in run_command(client, "clean cut 1")["error"]
+    assert "takes no extra" in run_command(client, "clean tidy 1 x")["error"]
+    assert "clean rules" in run_command(client, "clean")["error"]
+
+
+def test_console_map_command():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+
+    renamed = run_command(client, "map headers 1 Submitted at")["output"]
+    assert "renamed to 'Submitted at'" in renamed
+    assert "Submitted at" in state.session.df.columns
+
+    # values are matched whole, in that column only
+    miss = run_command(client, 'map values 4 "Male" "M"')["output"]
+    assert "holds exactly" in miss and "Male / പുരുഷൻ" in miss
+
+    hit = run_command(client, 'map values 4 "Male / പുരുഷൻ" "Male"')["output"]
+    assert "18 cell(s)" in hit
+    assert set(state.session.df.iloc[:, 3].unique()) == {"Male", "Female / സ്ത്രീ"}
+
+    assert "matches" in run_command(client, 'map values 1:3 "a" "b"')["error"]
+    assert "Usage" in run_command(client, "map")["error"]
+
+
 def test_table_view_and_header():
     client = fresh_client()
     upload(client, "sample_survey.csv")

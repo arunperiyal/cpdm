@@ -307,16 +307,22 @@ keep running yesterday's JavaScript against today's API.
 
 | Command | Result |
 | --- | --- |
-| `help` | Lists the available commands |
-| `show` / `head` | First 5 rows as a table |
-| `info` | Filename, dimensions, demographics, ignored-column count, scales and their members |
+| `head [n]` / `tail [n]` | First or last n rows, 5 by default (`show` is the old name for `head`) |
+| `headers [spec]` | The header row as a table — position, name, type, filled/blank, distinct, group, scale — all of it or just the columns named |
+| `info` | Filename, dimensions, ignored columns, groups and scales |
 | `summary` | `describe()` descriptive statistics |
-| `columns` | Column count and full list of names |
-| `groups` | The field group / subgroup tree, and the scale each group backs |
-| `scales` | The declared scales and the groups they read |
+| `groups` / `scales` | The group tree; the scales and their options |
+| `clean rules` | What `clean` can do and what each rule needs |
+| `clean <rule> <cols> [arg]` | Apply a cleaning rule to those columns; `clean headers …` for the header text |
+| `map headers <n> <name>` | Rename the column at position n |
+| `map values <n> "old" "new"` | Replace a whole answer, in that column only |
+| `replace "old" "new"` | Substring replacement across active text columns |
 | `docs` | Links to every documentation page |
-| `replace "old" "new"` | Global literal replacement across active text columns (quoted, Unicode-safe) |
 | `clear` | Clears the output pane |
+
+Anything after `#` is a comment; a `#` inside quotes belongs to the data. Columns are named
+the same way as in the group editor — `7`, `7:15`, a name, or `WB*` — and `headers` prints
+the positions.
 
 Arrow-up / arrow-down walk through command history. All output — results, successes and
 errors — is appended to the scrolling log pane.
@@ -465,7 +471,7 @@ the reply; `ValueError` from core becomes a 400 with its message.
 python -m pytest tests        # or: python tests/test_workflow.py
 ```
 
-Fifty-three end-to-end tests drive the HTTP API with the bundled samples: the full clean →
+Fifty-seven end-to-end tests drive the HTTP API with the bundled samples: the full clean →
 group → score → compute → export path, CSV upload, recipe replay (both v1 and v2),
 replacement ordering, exemptions, console commands, docs/sample serving, the Markdown
 fallback renderer, the trimming wizard (rule chains, delimiter sides, script awareness,
@@ -484,7 +490,9 @@ Table menu (paged rows, the column report, refused rename collisions, reorder an
 sorting keeping every respondent's score with their row, filtering counted before it
 deletes, and row labels staying stable), and the About box reporting the licence the
 repository actually has, and the theming contract — every colour coming from a variable
-some palette defines, and both pages applying preferences before the first paint.
+some palette defines, and both pages applying preferences before the first paint, and the console commands (comments stripped outside quotes, head
+and tail counts, the headers table, clean over a column range, and map matching a whole
+answer in one column).
 
 ---
 

@@ -48,6 +48,8 @@ The current application intentionally remains single-worker and
 single-dataset. `state.py` is therefore process-global. Durable session
 storage, concurrent edits, and multi-user authorization require a coordinated
 architecture change and must not be introduced through isolated route patches.
+Requests may opt into a persisted session with `X-CPDM-Session` and
+`X-CPDM-Owner`; requests without those headers retain the local default session.
 
 ## Durable sessions
 

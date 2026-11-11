@@ -58,3 +58,17 @@ def test_local_session_store_closes_and_rejects_missing_dataset(tmp_path):
         store.load(metadata.session_id, "alice")
     closed = store.close(metadata.session_id, "alice")
     assert closed.state == "closed"
+
+
+def test_local_session_store_can_backup_and_restore(tmp_path):
+    store = sessions.LocalSessionStore(tmp_path / "sessions")
+    metadata = store.create("alice")
+    dataset = sessions.Dataset()
+    dataset.load(pd.DataFrame({"value": [9]}), "backup.csv")
+    store.save(metadata.session_id, dataset)
+    backup = store.backup(metadata.session_id, tmp_path / "backup")
+    (store.root / metadata.session_id / "metadata.json").unlink()
+    restored = store.restore(metadata.session_id, backup)
+    assert restored.session_id == metadata.session_id
+    _, loaded = store.load(metadata.session_id, "alice")
+    assert loaded.df["value"].tolist() == [9]

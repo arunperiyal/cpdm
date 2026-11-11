@@ -159,6 +159,28 @@ def test_api_requires_bearer_token_when_enabled():
     assert allowed.status_code == 200
 
 
+def test_persisted_session_context_is_isolated_from_default_session(tmp_path):
+    state.reset()
+    app = create_app(TESTING=True, CPDM_SESSION_ROOT=str(tmp_path / "sessions"))
+    client = app.test_client()
+    created = client.post(
+        "/api/sessions", headers={"X-CPDM-Owner": "alice"}
+    ).get_json()
+    headers = {
+        "X-CPDM-Owner": "alice",
+        "X-CPDM-Session": created["session_id"],
+    }
+    response = client.post(
+        "/api/upload",
+        data={"file": (io.BytesIO(b"value\n7\n"), "session.csv")},
+        content_type="multipart/form-data",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert client.get("/api/get_state", headers=headers).get_json()["rows"] == 1
+    assert state.session.df is None
+
+
 def test_csv_upload_and_recipe_replay():
     client = fresh_client()
     loaded = upload(client, "sample_survey_wave2.csv").get_json()

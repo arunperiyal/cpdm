@@ -229,3 +229,32 @@ class LocalSessionStore(SessionStore):
                 shutil.rmtree(path)
                 removed.append(path.name)
         return removed
+
+    def backup(self, session_id, target):
+        """Copy a complete session directory to an explicit backup path."""
+        source = self._path(session_id)
+        if not source.exists():
+            raise ContractError(f"Unknown session '{session_id}'.")
+        target = Path(target).expanduser().resolve()
+        if target == source or source in target.parents:
+            raise ContractError("Backup target cannot be inside the session.")
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(source, target)
+        return target
+
+    def restore(self, session_id, backup):
+        """Restore a session directory after validating its metadata."""
+        source = Path(backup).expanduser().resolve()
+        if not (source / "metadata.json").exists():
+            raise ContractError("Backup is missing session metadata.")
+        metadata = SessionMetadata.from_dict(
+            json.loads((source / "metadata.json").read_text(encoding="utf-8"))
+        )
+        if metadata.session_id != session_id:
+            raise ContractError("Backup session ID does not match restore target.")
+        target = self._path(session_id)
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(source, target)
+        return metadata

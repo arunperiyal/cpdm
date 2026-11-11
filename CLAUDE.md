@@ -62,6 +62,8 @@ The repository ignores `__pycache__`, `.pytest_cache`, `.claude/settings.local.j
 
 Work from `docs/PLAN.md` one phase at a time.
 
+- Do not create or use Git worktrees; perform phase work in the current checkout
+  and switch branches directly.
 - Create a dedicated branch for every phase, using a descriptive name such as
   `phase-1-foundation` or `phase-2-measurement`.
 - Create one focused commit for every task checkbox completed in that phase.

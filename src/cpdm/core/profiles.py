@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 import math
+import json
+from pathlib import Path
 import re
 
 import pandas as pd
@@ -400,3 +402,104 @@ class ProfileStabilityReport:
             "sensitivity": dict(self.sensitivity),
             "warnings": list(self.warnings),
         }
+
+
+@dataclass(frozen=True)
+class ProfileAnalysisResult:
+    """Portable output from a profile-analysis adapter."""
+
+    spec: ProfileAnalysisSpec
+    solution: ProfileSolution
+    fit_statistic: FitStatistic
+    stability: ProfileStabilityReport | None = None
+    warnings: tuple[str, ...] = ()
+    metadata: dict = None
+
+    def __post_init__(self):
+        if self.solution.class_count != self.fit_statistic.class_count:
+            raise ContractError("Solution and fit statistic class counts must match.")
+        if self.stability and self.stability.class_count != self.solution.class_count:
+            raise ContractError("Stability and solution class counts must match.")
+        object.__setattr__(self, "warnings", tuple(str(value) for value in self.warnings))
+        object.__setattr__(self, "metadata", dict(self.metadata or {}))
+
+    def as_dict(self):
+        return {
+            "kind": "cpdm-profile-analysis-result",
+            "version": 1,
+            "spec": self.spec.as_dict(),
+            "solution": self.solution.as_dict(),
+            "fit_statistic": self.fit_statistic.as_dict(),
+            "stability": self.stability.as_dict() if self.stability else None,
+            "warnings": list(self.warnings),
+            "metadata": dict(self.metadata),
+        }
+
+
+class MixtureAnalysisRunner:
+    """Validate profile inputs and dispatch to a registered backend adapter."""
+
+    def __init__(self, adapters=None):
+        self.adapters = dict(adapters or {})
+
+    def register(self, estimator, adapter):
+        if not str(estimator).strip() or not callable(adapter):
+            raise ContractError("A runner adapter needs a name and callable.")
+        self.adapters[str(estimator)] = adapter
+
+    def run(self, frame, spec):
+        if not isinstance(spec, ProfileAnalysisSpec):
+            raise ContractError("MixtureAnalysisRunner requires a ProfileAnalysisSpec.")
+        spec.validate_frame(frame)
+        adapter = self.adapters.get(spec.estimator)
+        if adapter is None:
+            raise ContractError(
+                f"No mixture-analysis adapter is registered for '{spec.estimator}'."
+            )
+        result = adapter(frame, spec)
+        if not isinstance(result, ProfileAnalysisResult):
+            raise ContractError("Mixture-analysis adapters must return ProfileAnalysisResult.")
+        return result
+
+
+class ProfileResultWriter:
+    """Write profile specifications, assignments, and diagnostics."""
+
+    @staticmethod
+    def assignments_table(result):
+        rows = []
+        labels = result.solution.class_labels
+        for index, (assignment, posterior) in enumerate(
+            zip(result.solution.assignments, result.solution.posterior_probabilities)
+        ):
+            row = {"observation": index, "assigned_class": assignment}
+            row.update({
+                f"posterior_{label}": value
+                for label, value in zip(labels, posterior)
+            })
+            rows.append(row)
+        return pd.DataFrame(rows)
+
+    @classmethod
+    def write_json(cls, result, path):
+        Path(path).write_text(
+            json.dumps(result.as_dict(), indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    @classmethod
+    def write_csv(cls, result, path):
+        cls.assignments_table(result).to_csv(path, index=False)
+
+    @classmethod
+    def write_xlsx(cls, result, path):
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            cls.assignments_table(result).to_excel(
+                writer, sheet_name="assignments", index=False
+            )
+            pd.DataFrame([result.fit_statistic.as_dict()]).to_excel(
+                writer, sheet_name="fit", index=False
+            )
+            pd.DataFrame([{"warning": warning} for warning in result.warnings]).to_excel(
+                writer, sheet_name="warnings", index=False
+            )

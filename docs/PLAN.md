@@ -261,9 +261,9 @@ Add reusable core/base classes:
   explicit selection criteria and a human review record.
 - [x] `ProfileStabilityReport`: repeated-start agreement, bootstrap or
   resampling stability, label-alignment diagnostics, and sensitivity results.
-- [ ] `MixtureAnalysisRunner`: a method-agnostic runner boundary that can
+- [x] `MixtureAnalysisRunner`: a method-agnostic runner boundary that can
   dispatch to Python, R, or another statistical backend.
-- [ ] `ProfileResultWriter`: stable JSON/CSV/XLSX exports for specifications,
+- [x] `ProfileResultWriter`: stable JSON/CSV/XLSX exports for specifications,
   fit statistics, assignments, probabilities, parameters, and diagnostics.
 
 Design requirements:

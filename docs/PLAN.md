@@ -145,15 +145,15 @@ other statistical workflows without coupling them to the web UI.
 
 Define generic interfaces:
 
-- [ ] `AnalysisSpec`: named predictors, mediators, outcomes, moderators,
+- [x] `AnalysisSpec`: named predictors, mediators, outcomes, moderators,
   covariates, roles, estimator, and missing-data policy.
-- [ ] `AnalysisRunner`: validates inputs, builds a model design, executes one
+- [x] `AnalysisRunner`: validates inputs, builds a model design, executes one
   analysis, and returns typed results.
-- [ ] `EffectEstimate`: estimate, standard error, confidence interval, p-value
+- [x] `EffectEstimate`: estimate, standard error, confidence interval, p-value
   (when applicable), path label, role, and diagnostics.
-- [ ] `AnalysisResult`: model metadata, estimates, warnings, convergence status,
+- [x] `AnalysisResult`: model metadata, estimates, warnings, convergence status,
   and reproducible input fingerprint.
-- [ ] `ResultTable`/`ReportWriter`: stable CSV/XLSX/JSON output with human-readable
+- [x] `ResultTable`/`ReportWriter`: stable CSV/XLSX/JSON output with human-readable
   labels and machine-readable identifiers.
 
 Use the conventions in the R analysis code as domain requirements:
@@ -176,7 +176,7 @@ Relevant references include
 Do not implement every APIMeM model in the first pass. Start with a
 well-tested design-matrix/result contract and one small analysis adapter.
 
-- [ ] **Exit criteria:** an analysis can be run from a saved specification,
+- [x] **Exit criteria:** an analysis can be run from a saved specification,
       produces stable machine-readable results and diagnostics, and is
       testable without HTTP.
 
@@ -184,14 +184,14 @@ well-tested design-matrix/result contract and one small analysis adapter.
 
 **Goal:** make outputs suitable for review and repeated research use.
 
-- [ ] Add report bundles containing definitions, preparation manifests, model
+- [x] Add report bundles containing definitions, preparation manifests, model
    specifications, result tables, warnings, and figures.
-- [ ] Add reusable table formatting and figure-data exports instead of embedding
+- [x] Add reusable table formatting and figure-data exports instead of embedding
    formatting in individual analyses.
-- [ ] Add a figure specification layer for forest plots, path diagrams, and
+- [x] Add a figure specification layer for forest plots, path diagrams, and
    descriptive summaries.
-- [ ] Add comparison tools for two waves, two groups, or two pipeline runs.
-- [ ] Add provenance links from every reported result back to source columns,
+- [x] Add comparison tools for two waves, two groups, or two pipeline runs.
+- [x] Add provenance links from every reported result back to source columns,
    scale items, transformation steps, and model specification.
 
 The reporting design should reflect
@@ -199,7 +199,7 @@ The reporting design should reflect
 `tmp/APIM_Analysis/R/figures_common.R`, and the numbered figure scripts, but
 should keep raw results separate from presentation formatting.
 
-- [ ] **Exit criteria:** a complete run produces a self-contained report bundle
+- [x] **Exit criteria:** a complete run produces a self-contained report bundle
       that another person can inspect and regenerate from the recorded inputs.
 
 ## Stage 7 — Product hardening and operational improvements

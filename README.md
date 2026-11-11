@@ -1,9 +1,12 @@
 # Comprehensive Package for Data Management (CPDM)
 
-A local Flask web workspace for preparing survey / questionnaire datasets. CPDM gives you
+A local Flask web workspace for preparing structured research and operational datasets. CPDM gives you
 a menu-driven UI plus a small command console for cleaning messy headers and values,
 grouping columns into psychometric scales, reverse-scoring items, and computing row-level
-scale statistics — then exporting the result to `.xlsx` or `.csv`.
+scale statistics — then exporting the result to `.xlsx` or `.csv`. Its core contracts
+also support reproducible preparation pipelines, participant/dyad reshaping, generic
+analysis results, and report bundles; APIM is one supported analysis pattern rather
+than the product's organizing assumption.
 
 Everything runs on your own machine. The app opens your browser at
 `http://127.0.0.1:5000/` and keeps the working dataset in memory for the life of the

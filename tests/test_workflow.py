@@ -11,11 +11,20 @@ import sys
 from html import escape
 
 import pandas as pd
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from cpdm import create_app  # noqa: E402
-from cpdm.core import column_spec, groups, state, text_rules, workspace_files  # noqa: E402
+from cpdm.core import (
+    column_spec,
+    contracts,
+    groups,
+    state,
+    text_rules,
+    workspace_files,
+)  # noqa: E402
+from cpdm.core.dataset import Dataset  # noqa: E402
 from cpdm.core.markdown_lite import _fallback_render  # noqa: E402
 from cpdm.paths import PROJECT_ROOT  # noqa: E402
 
@@ -112,6 +121,60 @@ def test_csv_upload_and_recipe_replay():
     apply_recipe(client)
     assert "DS4" in state.session.df.columns
     assert set(state.session.df["Gender"].unique()) <= {"Male", "Female"}
+
+
+def test_upload_reports_operation_and_warnings():
+    client = fresh_client()
+    response = client.post(
+        "/api/upload",
+        data={
+            "file": (
+                io.BytesIO(b"Unnamed: 0,Answer,Empty\n1,Yes,\n2,No,\n"),
+                "warnings.csv",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["operation"] == "load"
+    assert body["changed"] is True
+    assert body["provenance"]["source_filename"] == "warnings.csv"
+    assert any("Unnamed columns" in warning for warning in body["warnings"])
+    assert any("no values" in warning for warning in body["warnings"])
+
+
+def test_invalid_table_contract_does_not_load():
+    dataset = Dataset()
+    duplicate = pd.DataFrame([[1, 2]], columns=["answer", "answer"])
+
+    with pytest.raises(contracts.ContractError, match="must be unique"):
+        contracts.validate_dataframe(duplicate)
+    assert dataset.df is None
+
+
+def test_invalid_recipe_is_rejected_before_mutation():
+    client = fresh_client()
+    upload(client, "sample_survey.csv")
+    before = state.session.df.copy(deep=True)
+
+    response = client.post(
+        "/api/apply_cleaning_rules_file",
+        data={
+            "file": (
+                io.BytesIO(json.dumps({
+                    "steps": [{"op": "not-a-real-operation"}]
+                }).encode("utf-8")),
+                "invalid.json",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert "unknown operation" in response.get_json()["error"]
+    pd.testing.assert_frame_equal(state.session.df, before)
 
 
 def test_longest_replacement_wins():

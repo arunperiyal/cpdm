@@ -355,3 +355,48 @@ class ClassSelectionReport:
             "review_notes": self.review_notes,
             "warnings": list(self.warnings),
         }
+
+
+@dataclass(frozen=True)
+class ProfileStabilityReport:
+    """Repeated-start and resampling evidence for one profile solution."""
+
+    class_count: int
+    repeated_start_count: int
+    agreement_rate: float
+    resample_count: int = 0
+    resample_agreement_rate: float | None = None
+    label_alignment: dict = None
+    sensitivity: dict = None
+    warnings: tuple[str, ...] = ()
+
+    def __post_init__(self):
+        if self.class_count < 2:
+            raise ContractError("Profile stability class_count must be at least 2.")
+        if self.repeated_start_count < 1:
+            raise ContractError("Profile stability needs at least one repeated start.")
+        if not 0 <= self.agreement_rate <= 1:
+            raise ContractError("Profile stability agreement_rate must be between 0 and 1.")
+        if self.resample_count < 0:
+            raise ContractError("Profile stability resample_count cannot be negative.")
+        if self.resample_agreement_rate is not None and not 0 <= self.resample_agreement_rate <= 1:
+            raise ContractError(
+                "Profile resample_agreement_rate must be between 0 and 1."
+            )
+        alignment = dict(self.label_alignment or {})
+        sensitivity = dict(self.sensitivity or {})
+        object.__setattr__(self, "label_alignment", alignment)
+        object.__setattr__(self, "sensitivity", sensitivity)
+        object.__setattr__(self, "warnings", tuple(str(value) for value in self.warnings))
+
+    def as_dict(self):
+        return {
+            "class_count": self.class_count,
+            "repeated_start_count": self.repeated_start_count,
+            "agreement_rate": self.agreement_rate,
+            "resample_count": self.resample_count,
+            "resample_agreement_rate": self.resample_agreement_rate,
+            "label_alignment": dict(self.label_alignment),
+            "sensitivity": dict(self.sensitivity),
+            "warnings": list(self.warnings),
+        }

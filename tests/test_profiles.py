@@ -92,3 +92,26 @@ def test_profile_solution_rejects_invalid_posteriors_and_selection():
     statistic = profiles.FitStatistic(2, -1, 2, 6, 8)
     with pytest.raises(contracts.ContractError, match="not in"):
         profiles.ClassSelectionReport("analysis", (statistic,), selected_class_count=3)
+
+
+def test_profile_stability_report_records_repeated_starts_and_resampling():
+    report = profiles.ProfileStabilityReport(
+        class_count=3,
+        repeated_start_count=20,
+        agreement_rate=0.95,
+        resample_count=100,
+        resample_agreement_rate=0.88,
+        label_alignment={"run_2": {"1": "2", "2": "1"}},
+        sensitivity={"standardized": {"selected_class_count": 3}},
+        warnings=("One small class needs review.",),
+    )
+
+    payload = report.as_dict()
+    assert payload["repeated_start_count"] == 20
+    assert payload["label_alignment"]["run_2"]["1"] == "2"
+    assert payload["warnings"] == ["One small class needs review."]
+
+
+def test_profile_stability_report_rejects_invalid_agreement():
+    with pytest.raises(contracts.ContractError, match="between 0 and 1"):
+        profiles.ProfileStabilityReport(2, 10, 1.2)

@@ -6,10 +6,12 @@ inside this package, documentation and samples are read from the project root.
 
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from cpdm.paths import STATIC_DIR, TEMPLATES_DIR
+from cpdm.core import state
+from cpdm.core.sessions import LocalSessionStore
 
 __version__ = "0.2.0"
 
@@ -43,6 +45,7 @@ def create_app(**config):
     app.config.setdefault("MAX_CONTENT_LENGTH", app.config["CPDM_MAX_UPLOAD_BYTES"])
     app.config.setdefault("CPDM_REQUIRE_AUTH", False)
     app.config.setdefault("CPDM_AUTH_TOKEN", None)
+    app.config.setdefault("CPDM_SESSION_ROOT", "data/sessions")
 
     if app.config["CPDM_REQUIRE_AUTH"] and not app.config["CPDM_AUTH_TOKEN"]:
         raise RuntimeError("CPDM_AUTH_TOKEN is required when authentication is enabled.")
@@ -59,6 +62,23 @@ def create_app(**config):
         if request.headers.get("Authorization") != expected:
             return jsonify({"error": "Authentication required."}), 401
         return None
+
+    @app.before_request
+    def activate_session_context():
+        session_id = request.headers.get("X-CPDM-Session")
+        if not session_id:
+            return None
+        g.cpdm_session_token = state.begin(
+            LocalSessionStore(app.config["CPDM_SESSION_ROOT"]),
+            session_id,
+            request.headers.get("X-CPDM-Owner", "local"),
+        )
+        return None
+
+    @app.after_request
+    def persist_session_context(response):
+        state.end(getattr(g, "cpdm_session_token", None))
+        return response
 
     @app.url_defaults
     def stamp_static(endpoint, values):

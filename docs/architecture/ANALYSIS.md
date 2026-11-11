@@ -17,7 +17,18 @@ boundary.
 
 Reusable summaries cover descriptive statistics, two-group comparisons,
 repeated-measures summaries, and a transparent linear-regression adapter.
-Additional methods should register through the same capability boundary.
+The registry also includes weighted regression, clustered regression,
+longitudinal and repeated-measures regression, and seeded bootstrap indirect
+effects. Weighted, clustered, and longitudinal adapters require explicit
+weights, cluster, subject, and time columns respectively; bootstrap indirect
+effects expose reproducible seeds, confidence intervals, and warnings for
+degenerate resamples. Capability metadata is available through the analysis
+API and can be preserved in portable project configurations.
+
+All adapters return the same `AnalysisResult` contract with an input
+fingerprint, serialized specification, diagnostics, warnings, and stable
+effect estimates. Adapter-specific unsupported policies or missing required
+columns fail with `ContractError` before model execution.
 
 ## Latent profiles
 
@@ -32,10 +43,21 @@ Additional methods should register through the same capability boundary.
 - `MixtureAnalysisRunner` dispatches registered Python, R, or other backends.
 - `ProfileResultWriter` exports assignments, probabilities, fit, parameters, and
   warnings without requiring HTTP state.
+- `gaussian_mixture_adapter` provides a reproducible scikit-learn Gaussian
+  mixture backend with repeated starts, class-count selection, fit statistics,
+  posterior entropy, and diagnostics for convergence, tiny classes, boundary
+  mixing proportions, and local-optimum sensitivity.
+- `dependency_diagnostics` reports optional Python and R backend availability.
+  `r_mixture_adapter` is an explicit integration boundary and fails visibly
+  until an external R runner is configured.
 
 Class labels have no substantive meaning until an explicit alignment is
 recorded. Tiny classes, missingness, convergence, boundary estimates, and
 backend limitations belong in diagnostics and provenance.
+
+`compare_class_counts` combines admissible fit statistics, stability warnings,
+and recorded substantive review. A review may explicitly select a class count;
+otherwise the lowest admissible BIC is used as a transparent default.
 
 ## Provenance and compatibility
 

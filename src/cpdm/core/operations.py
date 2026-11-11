@@ -2,9 +2,11 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+import inspect
+import json
 import json
 import tempfile
 
@@ -76,6 +78,7 @@ class JobRegistry:
             self._jobs[job_id] = {
                 "id": job_id, "operation": operation, "status": "queued",
                 "progress": 0, "error": None, "result": None,
+                "cancelled": False,
             }
         return job_id
 
@@ -94,12 +97,52 @@ class JobRegistry:
                 job["error"] = str(error)
             if result is not None:
                 job["result"] = result
+            if status == "cancelled":
+                job["cancelled"] = True
 
     def get(self, job_id):
         with self._lock:
             if job_id not in self._jobs:
                 raise ContractError(f"Unknown job '{job_id}'.")
             return dict(self._jobs[job_id])
+
+
+class JobCancelled(Exception):
+    """Raised by cooperative jobs after cancellation is requested."""
+
+
+class CancellationToken:
+    """Cooperative cancellation signal shared with a running job."""
+
+    def __init__(self):
+        self._event = Event()
+
+    def cancel(self):
+        self._event.set()
+
+    @property
+    def cancelled(self):
+        return self._event.is_set()
+
+    def check(self):
+        if self.cancelled:
+            raise JobCancelled("Job cancellation requested.")
+
+
+@dataclass(frozen=True)
+class JobSpec:
+    """Serializable description of a long-running core operation."""
+
+    operation: str
+    payload: dict
+
+    def __post_init__(self):
+        if not str(self.operation).strip():
+            raise ContractError("Job operation cannot be empty.")
+        try:
+            json.dumps(self.payload)
+        except (TypeError, ValueError):
+            raise ContractError("Job payload must be JSON serializable.") from None
 
 
 class JobExecutor:
@@ -109,21 +152,35 @@ class JobExecutor:
         self.registry = registry or JobRegistry()
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._futures = {}
+        self._tokens = {}
 
     def submit(self, operation, function, *args, **kwargs):
         job_id = self.registry.create(operation)
+        token = CancellationToken()
 
         def execute():
             self.registry.update(job_id, status="running")
             try:
-                result = function(*args, **kwargs)
+                if "cancellation" in inspect.signature(function).parameters:
+                    result = function(*args, cancellation=token, **kwargs)
+                else:
+                    result = function(*args, **kwargs)
+            except JobCancelled as exc:
+                self.registry.update(job_id, status="cancelled", error=exc)
+                return
             except Exception as exc:
                 self.registry.update(job_id, status="failed", error=exc)
                 return
             self.registry.update(job_id, status="completed", progress=100, result=result)
 
         self._futures[job_id] = self._executor.submit(execute)
+        self._tokens[job_id] = token
         return job_id
+
+    def submit_spec(self, spec, function, **kwargs):
+        if not isinstance(spec, JobSpec):
+            raise ContractError("submit_spec requires a JobSpec.")
+        return self.submit(spec.operation, function, spec.payload, **kwargs)
 
     def wait(self, job_id, timeout=None):
         """Wait for a submitted job and return its final registry snapshot."""
@@ -135,6 +192,12 @@ class JobExecutor:
 
     def shutdown(self):
         self._executor.shutdown(wait=True, cancel_futures=True)
+
+    def cancel(self, job_id):
+        token = self._tokens.get(job_id)
+        if token is None:
+            raise ContractError(f"Unknown job '{job_id}'.")
+        token.cancel()
 
     def __enter__(self):
         return self

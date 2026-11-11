@@ -18,9 +18,41 @@ def test_plugin_registry_validates_and_discovers_extensions():
     assert registry.metadata()[0].api_version == 1
 
 
+def test_trusted_plugin_manifests_validate_api_and_dependencies():
+    registry = plugins.PluginRegistry()
+    manifest = plugins.PluginManifest(
+        plugins.PluginMetadata("triple", "transformation", version="2"),
+        dependencies={"cpdm": ">=1.0"},
+        trusted=True,
+    )
+    registry.register_manifest(manifest, lambda value: value * 3, {"cpdm": "1.2"})
+    assert registry.get("transformation", "triple").implementation(2) == 6
+    with pytest.raises(contracts.ContractError, match="not explicitly trusted"):
+        registry.register_manifest(
+            plugins.PluginManifest(
+                plugins.PluginMetadata("untrusted", "report"), trusted=False
+            ),
+            lambda value: value,
+        )
+    with pytest.raises(contracts.ContractError, match="not satisfied"):
+        registry.register_manifest(
+            plugins.PluginManifest(
+                plugins.PluginMetadata("bad", "report"),
+                dependencies={"pandas": ">=3.0"},
+                trusted=True,
+            ),
+            lambda value: value,
+            {"pandas": "2.0"},
+        )
+
+
 def test_portable_bundle_and_revision_guard(tmp_path):
     path = tmp_path / "project.cpdm.zip"
-    config = project.ProjectConfig("demo", documents=("pipeline.json",))
+    config = project.ProjectConfig(
+        "demo",
+        documents=("pipeline.json",),
+        analysis_capabilities=({"name": "linear_regression"},),
+    )
     project.PortableBundle.write(path, config, {"pipeline.json": b"{}"})
     restored, files = project.PortableBundle.read(path)
     assert restored == config

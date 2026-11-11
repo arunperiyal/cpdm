@@ -48,3 +48,14 @@ The current application intentionally remains single-worker and
 single-dataset. `state.py` is therefore process-global. Durable session
 storage, concurrent edits, and multi-user authorization require a coordinated
 architecture change and must not be introduced through isolated route patches.
+Requests may opt into a persisted session with `X-CPDM-Session` and
+`X-CPDM-Owner`; requests without those headers retain the local default session.
+
+## Durable sessions
+
+`sessions.py` defines versioned `SessionMetadata`, ownership and lifecycle
+states, a storage contract, and `LocalSessionStore`. The local store persists
+the dataframe separately from JSON metadata and derived dataset definitions,
+uses session locks for writes, rejects owner mismatches, and supports explicit
+close and stale-session cleanup operations. It is a persistence boundary, not
+yet the web application's default request context.

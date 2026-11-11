@@ -1,0 +1,6 @@
+{
+  "name": "survey",
+  "schema_version": 1,
+  "documents": ["recipe.json", "scale-map.json"],
+  "settings": {"analysis_family": "cross-sectional"}
+}

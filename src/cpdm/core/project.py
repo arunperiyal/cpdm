@@ -3,8 +3,9 @@
 from dataclasses import dataclass, field
 import io
 import json
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import zipfile
+import time
 
 from cpdm.core.contracts import ContractError
 
@@ -16,16 +17,21 @@ class ProjectConfig:
     name: str
     schema_version: int = 1
     documents: tuple[str, ...] = ()
+    analysis_capabilities: tuple[dict, ...] = ()
     settings: dict = field(default_factory=dict)
 
     def __post_init__(self):
         object.__setattr__(self, "documents", tuple(self.documents))
+        object.__setattr__(
+            self, "analysis_capabilities", tuple(self.analysis_capabilities)
+        )
 
     def as_dict(self):
         return {
             "name": self.name,
             "schema_version": self.schema_version,
             "documents": list(self.documents),
+            "analysis_capabilities": list(self.analysis_capabilities),
             "settings": dict(self.settings),
         }
 
@@ -58,6 +64,51 @@ class PortableBundle:
                 for name in names if name != "project.json"
             }
         return config, files
+
+    @staticmethod
+    def preview(path, exclude=()):
+        """Preview bundle files before a redaction or deletion operation."""
+        with zipfile.ZipFile(path) as bundle:
+            names = [name for name in bundle.namelist() if name != "project.json"]
+        excluded = set(str(name) for name in exclude)
+        return {
+            "files": names,
+            "excluded": [name for name in names if name in excluded],
+            "remaining": [name for name in names if name not in excluded],
+        }
+
+    @staticmethod
+    def redact(path, target, exclude=()):
+        """Write a copy of a bundle without explicitly excluded artifacts."""
+        excluded = set(str(name) for name in exclude)
+        with zipfile.ZipFile(path) as source, zipfile.ZipFile(
+            target, "w", zipfile.ZIP_DEFLATED
+        ) as destination:
+            for name in source.namelist():
+                if name not in excluded:
+                    destination.writestr(name, source.read(name))
+        return target
+
+    @staticmethod
+    def delete(path):
+        """Delete one explicitly named bundle."""
+        target = Path(path).expanduser().resolve()
+        if not target.is_file():
+            raise ContractError("Portable bundle does not exist.")
+        target.unlink()
+
+    @staticmethod
+    def delete_if_older(path, max_age_seconds):
+        """Apply a retention rule to one explicitly named bundle."""
+        if max_age_seconds < 0:
+            raise ContractError("Bundle retention age cannot be negative.")
+        target = Path(path).expanduser().resolve()
+        if not target.is_file():
+            raise ContractError("Portable bundle does not exist.")
+        if time.time() - target.stat().st_mtime > max_age_seconds:
+            target.unlink()
+            return True
+        return False
 
 
 @dataclass

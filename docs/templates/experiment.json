@@ -1,0 +1,6 @@
+{
+  "name": "experiment",
+  "schema_version": 1,
+  "documents": ["recipe.json", "analysis.json"],
+  "settings": {"analysis_family": "regression"}
+}

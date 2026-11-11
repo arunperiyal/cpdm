@@ -1,0 +1,6 @@
+{
+  "name": "operational",
+  "schema_version": 1,
+  "documents": ["recipe.json", "pipeline.json"],
+  "settings": {"privacy": "restricted", "requires": ["identifier", "weight"]}
+}

@@ -6,6 +6,9 @@ __pycache__/
 venv/
 env/
 
+# Temporary files and directories
+tmp/
+
 # Tooling caches
 .pytest_cache/
 .ruff_cache/

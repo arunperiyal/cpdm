@@ -5,6 +5,8 @@ import os
 
 import pandas as pd
 
+from cpdm.core.contracts import validate_dataframe
+
 EXCEL_EXTENSIONS = (".xlsx", ".xlsm")
 CSV_EXTENSIONS = (".csv", ".tsv", ".txt")
 SUPPORTED_EXTENSIONS = EXCEL_EXTENSIONS + CSV_EXTENSIONS
@@ -34,7 +36,10 @@ def read_table(file_storage):
 def load_into(dataset, file_storage):
     """Read an upload and make it the working dataset."""
     df = read_table(file_storage)
-    return dataset.load(df, getattr(file_storage, "filename", None))
+    warnings = validate_dataframe(df)
+    loaded = dataset.load(df, getattr(file_storage, "filename", None))
+    loaded.update({"operation": "load", "changed": True, "warnings": warnings})
+    return loaded
 
 
 def export(dataset, fmt="xlsx"):

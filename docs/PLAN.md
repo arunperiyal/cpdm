@@ -211,20 +211,23 @@ should keep raw results separate from presentation formatting.
 **Goal:** make the application dependable for larger datasets and shared
 workflows.
 
-- [ ] Replace process-global state with explicit session storage when multi-user
-  access is required; retain the single-worker safeguard until then.
 - [x] Add upload size limits and safe temporary-file handling at the upload
   boundary.
 - [x] Add explicit API error boundaries for request-size failures and timeouts.
 - [ ] Add timeout enforcement for long-running operations.
-- [ ] Add background execution and progress reporting for expensive scoring,
-  reliability, bootstrap, and report jobs.
-- [ ] Add schema/version migrations for saved recipes, scale maps, pipelines, and
-  results.
-- [ ] Add CI for tests, formatting/type checks, browser/API smoke tests, and
-  documentation consistency.
-- [ ] Add authentication and authorization before recommending non-loopback
+- [x] Add a reusable in-process job executor with progress and failure reporting.
+- [ ] Connect expensive scoring, reliability, bootstrap, and report jobs to the
+  executor.
+- [x] Add explicit version validation and migration primitives for saved
+  documents.
+- [ ] Apply document migrations consistently to recipes, scale maps, pipelines,
+  and results.
+- [x] Add CI coverage for tests, bytecode checks, and API smoke tests.
+- [ ] Add formatting/type checks and documentation consistency checks.
+- [x] Require bearer-token authentication before allowing non-loopback
   deployment.
+- [ ] Replace process-global state with explicit per-user session storage before
+  supporting multi-user access.
 
 ## Stage 8 — Generalise the analysis and data-product layer
 

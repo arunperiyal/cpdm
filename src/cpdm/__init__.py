@@ -6,7 +6,7 @@ inside this package, documentation and samples are read from the project root.
 
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from cpdm.paths import STATIC_DIR, TEMPLATES_DIR
@@ -41,10 +41,24 @@ def create_app(**config):
         }
     )
     app.config.setdefault("MAX_CONTENT_LENGTH", app.config["CPDM_MAX_UPLOAD_BYTES"])
+    app.config.setdefault("CPDM_REQUIRE_AUTH", False)
+    app.config.setdefault("CPDM_AUTH_TOKEN", None)
+
+    if app.config["CPDM_REQUIRE_AUTH"] and not app.config["CPDM_AUTH_TOKEN"]:
+        raise RuntimeError("CPDM_AUTH_TOKEN is required when authentication is enabled.")
 
     @app.errorhandler(RequestEntityTooLarge)
     def handle_request_entity_too_large(error):
         return jsonify({"error": "Request exceeds the configured upload size limit."}), 413
+
+    @app.before_request
+    def require_api_authentication():
+        if not app.config["CPDM_REQUIRE_AUTH"] or not request.path.startswith("/api/"):
+            return None
+        expected = f"Bearer {app.config['CPDM_AUTH_TOKEN']}"
+        if request.headers.get("Authorization") != expected:
+            return jsonify({"error": "Authentication required."}), 401
+        return None
 
     @app.url_defaults
     def stamp_static(endpoint, values):

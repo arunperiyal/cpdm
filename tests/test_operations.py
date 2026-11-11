@@ -42,6 +42,23 @@ def test_job_registry_tracks_progress_and_errors():
     assert registry.get(job_id)["error"] == "bad input"
 
 
+def test_job_executor_reports_completion_and_failure():
+    with operations.JobExecutor() as executor:
+        completed = executor.submit("ok", lambda: {"value": 3})
+        failed = executor.submit("bad", lambda: (_ for _ in ()).throw(ValueError("no")))
+        assert executor.wait(completed)["status"] == "completed"
+        assert executor.registry.get(completed)["result"] == {"value": 3}
+        assert executor.wait(failed)["status"] == "failed"
+
+
+def test_run_with_timeout_enforces_positive_deadline():
+    assert operations.run_with_timeout(lambda: 3, 1) == 3
+    with pytest.raises(TimeoutError, match="timeout"):
+        operations.run_with_timeout(lambda: __import__("time").sleep(0.05), 0.001)
+    with pytest.raises(contracts.ContractError, match="greater than zero"):
+        operations.run_with_timeout(lambda: 3, 0)
+
+
 def test_versioned_document_applies_explicit_migration():
     document = operations.VersionedDocument(
         "example",

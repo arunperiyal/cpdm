@@ -20,10 +20,12 @@ def _flag(name):
 HOST = os.environ.get("CPDM_HOST", "127.0.0.1")
 PORT = int(os.environ.get("CPDM_PORT", "5000"))
 DEBUG = _flag("CPDM_DEBUG")
+AUTH_TOKEN = os.environ.get("CPDM_AUTH_TOKEN")
+REQUIRE_AUTH = HOST not in {"127.0.0.1", "::1", "localhost"} or bool(AUTH_TOKEN)
 #: a service has no one sitting in front of it, so it must not launch a browser
 NO_BROWSER = _flag("CPDM_NO_BROWSER")
 
-app = create_app()
+app = create_app(CPDM_AUTH_TOKEN=AUTH_TOKEN, CPDM_REQUIRE_AUTH=REQUIRE_AUTH)
 
 
 def open_browser():

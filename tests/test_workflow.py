@@ -150,6 +150,15 @@ def test_upload_returns_json_for_request_size_rejection():
     }
 
 
+def test_api_requires_bearer_token_when_enabled():
+    app = create_app(TESTING=True, CPDM_REQUIRE_AUTH=True, CPDM_AUTH_TOKEN="secret")
+    client = app.test_client()
+    denied = client.get("/api/get_state")
+    assert denied.status_code == 401
+    allowed = client.get("/api/get_state", headers={"Authorization": "Bearer secret"})
+    assert allowed.status_code == 200
+
+
 def test_csv_upload_and_recipe_replay():
     client = fresh_client()
     loaded = upload(client, "sample_survey_wave2.csv").get_json()

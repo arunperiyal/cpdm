@@ -242,7 +242,55 @@ reproducible transformations.
 - [ ] Add fixture-based compatibility checks for imported definitions and
   result schemas so future adapters remain backwards compatible.
 
-## Stage 9 — Collaboration and extensibility
+## Stage 9 — Add a latent profile analysis foundation
+
+**Goal:** support person-centred and mixture-model workflows without making
+latent profile analysis the only supported form of clustering or segmentation.
+
+Add reusable core/base classes:
+
+- [ ] `IndicatorDefinition`: source variable, measurement level, allowed
+  values, transformation, standardisation, and missing-value policy.
+- [ ] `ProfileAnalysisSpec`: indicators, requested class counts, estimator,
+  covariance structure, starts, weights, covariates, and reproducibility seed.
+- [ ] `ProfileSolution`: fitted class parameters, posterior probabilities,
+  most-likely class assignments, class sizes, and labelled profiles.
+- [ ] `FitStatistic`: log likelihood, AIC, BIC, adjusted BIC, entropy,
+  likelihood-ratio comparisons, and admissibility warnings.
+- [ ] `ClassSelectionReport`: comparable solutions across class counts with
+  explicit selection criteria and a human review record.
+- [ ] `ProfileStabilityReport`: repeated-start agreement, bootstrap or
+  resampling stability, label-alignment diagnostics, and sensitivity results.
+- [ ] `MixtureAnalysisRunner`: a method-agnostic runner boundary that can
+  dispatch to Python, R, or another statistical backend.
+- [ ] `ProfileResultWriter`: stable JSON/CSV/XLSX exports for specifications,
+  fit statistics, assignments, probabilities, parameters, and diagnostics.
+
+Design requirements:
+
+- [ ] Support continuous, ordinal, categorical, and mixed indicators through
+  explicit measurement metadata rather than treating every column as numeric.
+- [ ] Separate indicator preparation from model fitting so transformations are
+  recorded and can be reproduced for a second wave or new dataset.
+- [ ] Preserve observation identifiers outside the model matrix and prevent
+  identifiers, weights, or grouping fields from becoming indicators by
+  accident.
+- [ ] Surface empty or tiny classes, boundary estimates, non-convergence,
+  local solutions, singular covariance structures, and excessive missingness.
+- [ ] Keep class labels stable only through explicit alignment; never assume
+  that numeric class labels have substantive meaning across runs.
+- [ ] Treat the number of profiles as an evidence-informed decision combining
+  fit statistics, stability, interpretability, and substantive review.
+- [ ] Allow covariates and distal outcomes to be represented without leaking
+  post-classification variables into the indicator-fitting step.
+- [ ] Record seeds, software/backend versions, input fingerprints, and all
+  model-selection decisions in the result provenance.
+
+- [ ] **Exit criteria:** a saved profile specification can prepare validated
+      indicators, compare multiple class-count solutions, produce assignments
+      and diagnostics, and export a result bundle without HTTP or UI state.
+
+## Stage 10 — Collaboration and extensibility
 
 **Goal:** support teams and extensions without weakening local-first safety.
 
@@ -262,8 +310,9 @@ building analysis functionality on ambiguous or non-reproducible data
 transformations. Implement the reusable dyad and grouping primitives before
 methods that need them, then grow Stage 5 through small adapters. Treat APIM as
 one supported example alongside other designs, not as the organizing
-architecture. Finish Stages 6-9 as reporting, deployment, and collaboration
-needs become clear.
+architecture. Add the latent-profile foundation after the generic analysis
+contracts and before backend-specific mixture-model implementations. Finish
+Stages 6-10 as reporting, deployment, and collaboration needs become clear.
 
 ## Decisions to make before implementation
 
@@ -278,3 +327,7 @@ needs become clear.
 - Is multi-user hosting in scope, or should CPDM remain a local single-user
   workspace?
 - Which privacy and retention rules should govern saved bundles and exports?
+- Which mixture-model backends and indicator families should be supported
+  first, and how should backend-specific limitations be reported?
+- Should profile assignments be treated as exploratory classifications, or can
+  they be promoted to confirmatory variables only through a recorded decision?

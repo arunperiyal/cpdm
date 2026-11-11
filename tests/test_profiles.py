@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 import pandas as pd
 import pytest
@@ -115,3 +116,44 @@ def test_profile_stability_report_records_repeated_starts_and_resampling():
 def test_profile_stability_report_rejects_invalid_agreement():
     with pytest.raises(contracts.ContractError, match="between 0 and 1"):
         profiles.ProfileStabilityReport(2, 10, 1.2)
+
+
+def test_mixture_runner_validates_adapter_contract_and_writes_results(tmp_path):
+    spec = profiles.ProfileAnalysisSpec(
+        "profiles",
+        indicators=(profiles.IndicatorDefinition("score", "score"),),
+        estimator="fake",
+        identifier_columns=("participant_id",),
+    )
+    solution = profiles.ProfileSolution(
+        2, ("low", "high"), {"means": {}}, ("low", "high"),
+        ((0.8, 0.2), (0.1, 0.9)), {"low": 1, "high": 1},
+    )
+    fit = profiles.FitStatistic(2, -2, 3, 10, 12)
+    expected = profiles.ProfileAnalysisResult(spec, solution, fit)
+    runner = profiles.MixtureAnalysisRunner({
+        "fake": lambda frame, received: expected,
+    })
+    frame = pd.DataFrame({"participant_id": ["a", "b"], "score": [1.0, 3.0]})
+
+    result = runner.run(frame, spec)
+    json_path = tmp_path / "profile.json"
+    csv_path = tmp_path / "assignments.csv"
+    xlsx_path = tmp_path / "profile.xlsx"
+    profiles.ProfileResultWriter.write_json(result, json_path)
+    profiles.ProfileResultWriter.write_csv(result, csv_path)
+    profiles.ProfileResultWriter.write_xlsx(result, xlsx_path)
+
+    assert result is expected
+    assert json.loads(json_path.read_text())["kind"] == "cpdm-profile-analysis-result"
+    assert list(pd.read_csv(csv_path)["assigned_class"]) == ["low", "high"]
+    assert xlsx_path.exists()
+
+
+def test_mixture_runner_rejects_unknown_backend():
+    spec = profiles.ProfileAnalysisSpec(
+        "profiles",
+        indicators=(profiles.IndicatorDefinition("score", "score"),),
+    )
+    with pytest.raises(contracts.ContractError, match="No mixture-analysis adapter"):
+        profiles.MixtureAnalysisRunner().run(pd.DataFrame({"score": [1.0]}), spec)

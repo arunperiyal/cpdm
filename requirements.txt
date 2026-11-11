@@ -6,3 +6,6 @@ openpyxl>=3.1        # pandas engine for reading and writing .xlsx
 # Optional: nicer Markdown rendering for the docs pages.
 # Without it CPDM falls back to its built-in renderer (cpdm.core.markdown_lite).
 markdown>=3.5
+
+# Test dependency used by the local and CI suites.
+pytest>=8.0

@@ -310,13 +310,13 @@ Design requirements:
 
 **Goal:** support teams and extensions without weakening local-first safety.
 
-- [ ] Define a versioned plugin boundary for custom transformations,
+- [x] Define a versioned plugin boundary for custom transformations,
   instruments, estimators, and report components.
-- [ ] Add project-level configuration and portable bundles that can move
+- [x] Add project-level configuration and portable bundles that can move
   between machines without relying on process-global state.
-- [ ] Add optional authenticated collaboration only after session storage,
+- [x] Add optional authenticated collaboration only after session storage,
   authorization, audit logging, and concurrent-edit semantics are designed.
-- [ ] Add documentation examples for non-dyadic datasets, including repeated
+- [x] Add documentation examples for non-dyadic datasets, including repeated
   measures, experiments, and operational data.
 
 ## Suggested implementation order

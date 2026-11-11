@@ -8,6 +8,11 @@ also support reproducible preparation pipelines, participant/dyad reshaping, gen
 analysis results, and report bundles; APIM is one supported analysis pattern rather
 than the product's organizing assumption.
 
+The same analysis layer supports non-dyadic data: use an observation key with
+participant and wave columns for repeated measures, a cluster column for
+experiments or sites, and the generic regression and summary adapters for
+operational tables.
+
 Everything runs on your own machine. The app opens your browser at
 `http://127.0.0.1:5000/` and keeps the working dataset in memory for the life of the
 process. Built-in documentation (Theory and Help) is served at `/docs`.

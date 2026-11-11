@@ -21,6 +21,21 @@ python app.py
 Python 3 with Flask, pandas and openpyxl. The optional `markdown` package improves the
 rendering of the documentation pages; without it CPDM uses its own built-in renderer.
 
+### Running a saved preparation pipeline
+
+Preparation definitions can be run without opening the browser:
+
+```bash
+python cpdm_pipeline.py \
+  --input samples/sample_survey.csv \
+  --pipeline pipeline.json \
+  --output processed_sample.csv \
+  --manifest processed_sample.manifest.json
+```
+
+Use `--dry-run` to validate and preview the steps without writing an output
+table. A scoring step also accepts `--scale-map path/to/scale_map.csv`.
+
 Environment overrides: `CPDM_HOST`, `CPDM_PORT`, `CPDM_DEBUG`, `CPDM_NO_BROWSER`,
 `CPDM_DOCS_DIR`, `CPDM_SAMPLES_DIR`.
 

@@ -10,9 +10,9 @@ focused commits, regression tests, and an updated architecture document.
 **Goal:** move beyond one process-global dataset without breaking local-first
 usage.
 
-- [ ] Define a session/document storage contract with explicit ownership,
+- [x] Define a session/document storage contract with explicit ownership,
       lifecycle, locking, and cleanup rules.
-- [ ] Add a durable local session store with migration-safe metadata and
+- [x] Add a durable local session store with migration-safe metadata and
       configurable storage roots.
 - [ ] Refactor web routes and services to receive a session context rather than
       importing process-global state.

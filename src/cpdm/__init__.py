@@ -6,7 +6,8 @@ inside this package, documentation and samples are read from the project root.
 
 import os
 
-from flask import Flask
+from flask import Flask, jsonify
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from cpdm.paths import STATIC_DIR, TEMPLATES_DIR
 
@@ -40,6 +41,10 @@ def create_app(**config):
         }
     )
     app.config.setdefault("MAX_CONTENT_LENGTH", app.config["CPDM_MAX_UPLOAD_BYTES"])
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_request_entity_too_large(error):
+        return jsonify({"error": "Request exceeds the configured upload size limit."}), 413
 
     @app.url_defaults
     def stamp_static(endpoint, values):

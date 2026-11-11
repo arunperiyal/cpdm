@@ -215,7 +215,8 @@ workflows.
   access is required; retain the single-worker safeguard until then.
 - [x] Add upload size limits and safe temporary-file handling at the upload
   boundary.
-- [ ] Add timeout and explicit error boundaries for long-running operations.
+- [x] Add explicit API error boundaries for request-size failures and timeouts.
+- [ ] Add timeout enforcement for long-running operations.
 - [ ] Add background execution and progress reporting for expensive scoring,
   reliability, bootstrap, and report jobs.
 - [ ] Add schema/version migrations for saved recipes, scale maps, pipelines, and

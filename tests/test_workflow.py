@@ -136,6 +136,20 @@ def test_upload_respects_configured_size_limit():
     assert "size limit" in response.get_json()["error"]
 
 
+def test_upload_returns_json_for_request_size_rejection():
+    state.reset()
+    app = create_app(TESTING=True, MAX_CONTENT_LENGTH=1)
+    response = app.test_client().post(
+        "/api/upload",
+        data={"file": (io.BytesIO(b"a,b\n1,2\n"), "dataset.csv")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 413
+    assert response.get_json() == {
+        "error": "Request exceeds the configured upload size limit."
+    }
+
+
 def test_csv_upload_and_recipe_replay():
     client = fresh_client()
     loaded = upload(client, "sample_survey_wave2.csv").get_json()

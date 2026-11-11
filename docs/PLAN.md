@@ -253,11 +253,11 @@ Add reusable core/base classes:
   values, transformation, standardisation, and missing-value policy.
 - [x] `ProfileAnalysisSpec`: indicators, requested class counts, estimator,
   covariance structure, starts, weights, covariates, and reproducibility seed.
-- [ ] `ProfileSolution`: fitted class parameters, posterior probabilities,
+- [x] `ProfileSolution`: fitted class parameters, posterior probabilities,
   most-likely class assignments, class sizes, and labelled profiles.
-- [ ] `FitStatistic`: log likelihood, AIC, BIC, adjusted BIC, entropy,
+- [x] `FitStatistic`: log likelihood, AIC, BIC, adjusted BIC, entropy,
   likelihood-ratio comparisons, and admissibility warnings.
-- [ ] `ClassSelectionReport`: comparable solutions across class counts with
+- [x] `ClassSelectionReport`: comparable solutions across class counts with
   explicit selection criteria and a human review record.
 - [ ] `ProfileStabilityReport`: repeated-start agreement, bootstrap or
   resampling stability, label-alignment diagnostics, and sensitivity results.

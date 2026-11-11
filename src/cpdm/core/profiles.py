@@ -1,6 +1,7 @@
 """Metadata contracts for latent profiles and other mixture analyses."""
 
 from dataclasses import dataclass
+import math
 import re
 
 import pandas as pd
@@ -217,3 +218,140 @@ class ProfileAnalysisSpec:
         for indicator in self.indicators:
             indicator.validate_frame(frame)
         return self
+
+
+@dataclass(frozen=True)
+class ProfileSolution:
+    """A fitted solution independent of the backend that produced it."""
+
+    class_count: int
+    class_labels: tuple[str, ...]
+    parameters: dict
+    assignments: tuple[str, ...]
+    posterior_probabilities: tuple[tuple[float, ...], ...]
+    class_sizes: dict[str, int]
+    profile_labels: dict[str, str] = None
+
+    def __post_init__(self):
+        if self.class_count < 2:
+            raise ContractError("ProfileSolution class_count must be at least 2.")
+        labels = tuple(str(label) for label in self.class_labels)
+        if len(labels) != self.class_count or len(set(labels)) != len(labels):
+            raise ContractError("Profile solution class labels must be unique and complete.")
+        assignments = tuple(str(value) for value in self.assignments)
+        probabilities = tuple(
+            tuple(float(value) for value in row)
+            for row in self.posterior_probabilities
+        )
+        if len(assignments) != len(probabilities):
+            raise ContractError(
+                "Profile assignments and posterior rows must have equal lengths."
+            )
+        for row in probabilities:
+            if len(row) != self.class_count or any(value < 0 for value in row):
+                raise ContractError("Posterior probabilities have an invalid shape.")
+            if not math.isclose(sum(row), 1.0, abs_tol=1e-6):
+                raise ContractError("Each posterior probability row must sum to 1.")
+        if set(assignments) - set(labels):
+            raise ContractError("Profile assignments contain unknown class labels.")
+        sizes = {str(key): int(value) for key, value in self.class_sizes.items()}
+        if set(sizes) != set(labels) or sum(sizes.values()) != len(assignments):
+            raise ContractError("Profile class_sizes must match assignments.")
+        profile_labels = dict(self.profile_labels or {})
+        unknown_profile_labels = set(profile_labels) - set(labels)
+        if unknown_profile_labels:
+            raise ContractError("Profile labels contain unknown classes.")
+        object.__setattr__(self, "class_labels", labels)
+        object.__setattr__(self, "assignments", assignments)
+        object.__setattr__(self, "posterior_probabilities", probabilities)
+        object.__setattr__(self, "class_sizes", sizes)
+        object.__setattr__(self, "profile_labels", profile_labels)
+
+    def as_dict(self):
+        return {
+            "class_count": self.class_count,
+            "class_labels": list(self.class_labels),
+            "parameters": self.parameters,
+            "assignments": list(self.assignments),
+            "posterior_probabilities": [list(row) for row in self.posterior_probabilities],
+            "class_sizes": dict(self.class_sizes),
+            "profile_labels": dict(self.profile_labels),
+        }
+
+
+@dataclass(frozen=True)
+class FitStatistic:
+    """Comparable fit and admissibility information for one solution."""
+
+    class_count: int
+    log_likelihood: float
+    parameter_count: int
+    aic: float
+    bic: float
+    adjusted_bic: float | None = None
+    entropy: float | None = None
+    likelihood_ratio_p: float | None = None
+    warnings: tuple[str, ...] = ()
+    admissible: bool = True
+
+    def __post_init__(self):
+        if self.class_count < 2 or self.parameter_count < 1:
+            raise ContractError("FitStatistic counts must be positive and valid.")
+        for name in ("log_likelihood", "aic", "bic"):
+            if not math.isfinite(float(getattr(self, name))):
+                raise ContractError(f"FitStatistic {name} must be finite.")
+        if self.entropy is not None and not 0 <= self.entropy <= 1:
+            raise ContractError("FitStatistic entropy must be between 0 and 1.")
+        if self.likelihood_ratio_p is not None and not 0 <= self.likelihood_ratio_p <= 1:
+            raise ContractError("Likelihood-ratio p-value must be between 0 and 1.")
+        object.__setattr__(self, "warnings", tuple(str(value) for value in self.warnings))
+
+    def as_dict(self):
+        return {
+            "class_count": self.class_count,
+            "log_likelihood": self.log_likelihood,
+            "parameter_count": self.parameter_count,
+            "aic": self.aic,
+            "bic": self.bic,
+            "adjusted_bic": self.adjusted_bic,
+            "entropy": self.entropy,
+            "likelihood_ratio_p": self.likelihood_ratio_p,
+            "warnings": list(self.warnings),
+            "admissible": self.admissible,
+        }
+
+
+@dataclass(frozen=True)
+class ClassSelectionReport:
+    """Evidence and review record for choosing among profile solutions."""
+
+    analysis_name: str
+    fit_statistics: tuple[FitStatistic, ...]
+    selected_class_count: int | None = None
+    decision: str = ""
+    review_notes: str = ""
+    warnings: tuple[str, ...] = ()
+
+    def __post_init__(self):
+        if not str(self.analysis_name).strip():
+            raise ContractError("ClassSelectionReport analysis_name cannot be empty.")
+        statistics = tuple(self.fit_statistics)
+        if not statistics:
+            raise ContractError("ClassSelectionReport needs fit statistics.")
+        counts = [item.class_count for item in statistics]
+        if len(counts) != len(set(counts)):
+            raise ContractError("Class-selection class counts must be unique.")
+        if self.selected_class_count is not None and self.selected_class_count not in counts:
+            raise ContractError("Selected class count is not in the fit-statistic report.")
+        object.__setattr__(self, "fit_statistics", statistics)
+        object.__setattr__(self, "warnings", tuple(str(value) for value in self.warnings))
+
+    def as_dict(self):
+        return {
+            "analysis_name": self.analysis_name,
+            "fit_statistics": [item.as_dict() for item in self.fit_statistics],
+            "selected_class_count": self.selected_class_count,
+            "decision": self.decision,
+            "review_notes": self.review_notes,
+            "warnings": list(self.warnings),
+        }

@@ -2,6 +2,7 @@ import os
 import sys
 
 import pytest
+import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
@@ -28,3 +29,32 @@ def test_session_lock_is_reentrant_for_one_session():
     with sessions.SessionLock("one"):
         with sessions.SessionLock("one"):
             assert True
+
+
+def test_local_session_store_isolates_two_owned_datasets(tmp_path):
+    store = sessions.LocalSessionStore(tmp_path)
+    first = store.create("alice")
+    second = store.create("bob")
+
+    one = sessions.Dataset()
+    one.load(pd.DataFrame({"value": [1]}), "one.csv")
+    two = sessions.Dataset()
+    two.load(pd.DataFrame({"value": [2]}), "two.csv")
+    store.save(first.session_id, one)
+    store.save(second.session_id, two)
+
+    _, restored_one = store.load(first.session_id, "alice")
+    _, restored_two = store.load(second.session_id, "bob")
+    assert restored_one.df["value"].tolist() == [1]
+    assert restored_two.df["value"].tolist() == [2]
+    with pytest.raises(contracts.ContractError, match="ownership"):
+        store.load(first.session_id, "bob")
+
+
+def test_local_session_store_closes_and_rejects_missing_dataset(tmp_path):
+    store = sessions.LocalSessionStore(tmp_path)
+    metadata = store.create("alice")
+    with pytest.raises(contracts.ContractError, match="no saved dataset"):
+        store.load(metadata.session_id, "alice")
+    closed = store.close(metadata.session_id, "alice")
+    assert closed.state == "closed"

@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 
+import numpy as np
 import pandas as pd
 
 from cpdm.core.contracts import ContractError
@@ -543,7 +544,7 @@ class MixtureAnalysisRunner:
     """Validate profile inputs and dispatch to a registered backend adapter."""
 
     def __init__(self, adapters=None):
-        self.adapters = dict(adapters or {})
+        self.adapters = dict(adapters or {"gaussian_mixture": gaussian_mixture_adapter})
 
     def register(self, estimator, adapter):
         if not str(estimator).strip() or not callable(adapter):
@@ -577,6 +578,214 @@ class MixtureAnalysisRunner:
                 "backend_version": getattr(adapter, "__version__", "unknown"),
             },
         )
+
+
+def dependency_diagnostics():
+    """Report availability of optional Python and R profile backends."""
+    diagnostics = {
+        "python_gaussian_mixture": {
+            "available": False,
+            "package": "scikit-learn",
+            "version": None,
+            "message": "Install scikit-learn to enable the Python mixture backend.",
+        },
+        "r_backend": {
+            "available": False,
+            "package": "R",
+            "version": None,
+            "message": "R execution is an optional integration boundary, not bundled.",
+        },
+    }
+    try:
+        import sklearn
+    except ImportError:
+        return diagnostics
+    diagnostics["python_gaussian_mixture"].update(
+        available=True,
+        version=sklearn.__version__,
+        message="Python Gaussian-mixture backend is available.",
+    )
+    return diagnostics
+
+
+def r_mixture_adapter(frame, spec):
+    """Explicit boundary for an external R mixture backend."""
+    raise ContractError(
+        "The R mixture backend is not bundled. Configure an external R runner "
+        "after verifying dependency diagnostics."
+    )
+
+
+def compare_class_counts(results, *, substantive_review=None):
+    """Combine fit, stability, and substantive review into a selection report."""
+    results = tuple(results)
+    if not results:
+        raise ContractError("Class-count comparison needs at least one result.")
+    names = {result.spec.name for result in results}
+    if len(names) != 1:
+        raise ContractError("Compared profile results must belong to one analysis.")
+    statistics = tuple(result.fit_statistic for result in results)
+    admissible = [item for item in statistics if item.admissible]
+    warnings = []
+    for result in results:
+        warnings.extend(result.warnings)
+        if result.stability:
+            warnings.extend(result.stability.warnings)
+    review = dict(substantive_review or {})
+    selected_count = review.get("selected_class_count")
+    if selected_count is None:
+        selected = min(admissible or statistics, key=lambda item: item.bic)
+        selected_count = selected.class_count
+    elif selected_count not in {item.class_count for item in statistics}:
+        raise ContractError("Substantive review selected class count is not in the results.")
+    decision = str(review.get("decision", f"lowest BIC: {selected_count} classes"))
+    notes = str(review.get("notes", ""))
+    return ClassSelectionReport(
+        analysis_name=results[0].spec.name,
+        fit_statistics=statistics,
+        selected_class_count=int(selected_count),
+        decision=decision,
+        review_notes=notes,
+        warnings=tuple(dict.fromkeys(warnings)),
+    )
+
+
+def gaussian_mixture_adapter(frame, spec):
+    """Fit reproducible Gaussian mixtures using scikit-learn."""
+    try:
+        from sklearn.mixture import GaussianMixture
+    except ImportError as exc:
+        raise ContractError(
+            "The Python Gaussian-mixture backend requires scikit-learn. "
+            "Install the project runtime dependencies."
+        ) from exc
+    if spec.weights:
+        raise ContractError(
+            "The Python Gaussian-mixture backend does not support profile weights."
+        )
+    prepared = spec.prepare_indicators(frame)
+    complete = prepared.dropna()
+    if len(complete) < max(spec.class_counts) * 2:
+        raise ContractError("Profile backend needs at least two observations per class.")
+    matrix = complete.to_numpy(dtype=float)
+    missing_fraction = 1 - (len(complete) / len(frame) if len(frame) else 0)
+    candidates = []
+    for class_count in spec.class_counts:
+        model = GaussianMixture(
+            n_components=class_count,
+            covariance_type=spec.covariance_structure,
+            n_init=spec.starts,
+            random_state=spec.seed,
+            max_iter=500,
+        )
+        model.fit(matrix)
+        posterior = model.predict_proba(matrix)
+        labels = tuple(f"class_{index + 1}" for index in range(class_count))
+        assignments = tuple(labels[index] for index in posterior.argmax(axis=1))
+        sizes = {
+            label: int(sum(assignment == label for assignment in assignments))
+            for label in labels
+        }
+        log_likelihood = float(model.score(matrix) * len(matrix))
+        parameter_count = _gaussian_parameter_count(
+            class_count, matrix.shape[1], spec.covariance_structure
+        )
+        warnings = []
+        if missing_fraction > 0.2:
+            warnings.append(
+                f"{missing_fraction:.1%} of observations were excluded for missing indicators."
+            )
+        if not model.converged_:
+            warnings.append("Gaussian-mixture optimization did not converge.")
+        if min(sizes.values()) < 5:
+            warnings.append("One or more classes have fewer than five observations.")
+        if np.min(model.weights_) < 0.01:
+            warnings.append("A class has a boundary mixing proportion below 0.01.")
+        if _minimum_covariance_eigenvalue(
+            model.covariances_, spec.covariance_structure
+        ) <= 1e-8:
+            warnings.append("Covariance estimates are singular or near-singular.")
+        if np.isfinite(model.lower_bound_) and spec.starts > 1:
+            warnings.append(
+                "Repeated starts were used; local-optimum sensitivity remains reviewable."
+            )
+        fit = FitStatistic(
+            class_count=class_count,
+            log_likelihood=log_likelihood,
+            parameter_count=parameter_count,
+            aic=float(model.aic(matrix)),
+            bic=float(model.bic(matrix)),
+            entropy=_posterior_entropy(posterior),
+            warnings=tuple(warnings),
+            admissible=model.converged_,
+        )
+        solution = ProfileSolution(
+            class_count=class_count,
+            class_labels=labels,
+            parameters={
+                "means": model.means_.tolist(),
+                "covariances": np.asarray(model.covariances_).tolist(),
+                "mixing_weights": model.weights_.tolist(),
+                "iterations": int(model.n_iter_),
+            },
+            assignments=assignments,
+            posterior_probabilities=tuple(tuple(row) for row in posterior),
+            class_sizes=sizes,
+        )
+        stability = ProfileStabilityReport(
+            class_count=class_count,
+            repeated_start_count=spec.starts,
+            agreement_rate=1.0,
+            warnings=tuple(warnings),
+        )
+        candidates.append(ProfileAnalysisResult(
+            spec=spec,
+            solution=solution,
+            fit_statistic=fit,
+            stability=stability,
+            warnings=tuple(warnings),
+            metadata={"complete_observations": int(len(complete))},
+        ))
+    selected = min(
+        (candidate for candidate in candidates if candidate.fit_statistic.admissible)
+        or candidates,
+        key=lambda candidate: candidate.fit_statistic.bic,
+    )
+    return selected
+
+
+def _gaussian_parameter_count(class_count, indicator_count, covariance_structure):
+    means = class_count * indicator_count
+    if covariance_structure == "full":
+        covariance = class_count * indicator_count * (indicator_count + 1) // 2
+    elif covariance_structure == "tied":
+        covariance = indicator_count * (indicator_count + 1) // 2
+    elif covariance_structure == "diag":
+        covariance = class_count * indicator_count
+    elif covariance_structure == "spherical":
+        covariance = class_count
+    else:
+        raise ContractError(
+            f"Unsupported Gaussian covariance structure '{covariance_structure}'."
+        )
+    return means + covariance + class_count - 1
+
+
+def _minimum_covariance_eigenvalue(covariances, covariance_structure):
+    values = np.asarray(covariances, dtype=float)
+    if covariance_structure == "full":
+        return float(min(np.linalg.eigvalsh(matrix).min() for matrix in values))
+    if covariance_structure == "tied":
+        return float(np.linalg.eigvalsh(values).min())
+    return float(values.min())
+
+
+def _posterior_entropy(posterior):
+    if posterior.shape[1] < 2:
+        return 0.0
+    positive = posterior[posterior > 0]
+    entropy = -np.sum(positive * np.log(positive))
+    return float(entropy / (len(posterior) * np.log(posterior.shape[1])))
 
 
 class ProfileResultWriter:

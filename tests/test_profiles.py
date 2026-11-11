@@ -178,9 +178,80 @@ def test_mixture_runner_rejects_unknown_backend():
     spec = profiles.ProfileAnalysisSpec(
         "profiles",
         indicators=(profiles.IndicatorDefinition("score", "score"),),
+        estimator="missing_backend",
     )
     with pytest.raises(contracts.ContractError, match="No mixture-analysis adapter"):
         profiles.MixtureAnalysisRunner().run(pd.DataFrame({"score": [1.0]}), spec)
+
+
+def test_python_mixture_backend_is_reproducible_and_selects_class_count():
+    pytest.importorskip("sklearn")
+    frame = pd.DataFrame({
+        "score_1": [0.0, 0.1, -0.1, 5.0, 5.1, 4.9],
+        "score_2": [0.1, 0.0, -0.2, 5.1, 4.9, 5.0],
+    })
+    spec = profiles.ProfileAnalysisSpec(
+        "profiles",
+        indicators=(
+            profiles.IndicatorDefinition("score_1", "score_1"),
+            profiles.IndicatorDefinition("score_2", "score_2"),
+        ),
+        class_counts=(2, 3),
+        starts=3,
+        seed=17,
+    )
+    runner = profiles.MixtureAnalysisRunner()
+    first = runner.run(frame, spec)
+    second = runner.run(frame, spec)
+
+    assert first.solution.as_dict() == second.solution.as_dict()
+    assert first.fit_statistic.class_count in {2, 3}
+    assert first.metadata["seed"] == 17
+    assert first.stability.repeated_start_count == 3
+
+
+def test_profile_class_count_comparison_keeps_substantive_review():
+    indicator = profiles.IndicatorDefinition("score", "score")
+    spec = profiles.ProfileAnalysisSpec("profiles", indicators=(indicator,))
+    solution = profiles.ProfileSolution(
+        2, ("a", "b"), {}, ("a", "b"), ((1, 0), (0, 1)), {"a": 1, "b": 1}
+    )
+    results = (
+        profiles.ProfileAnalysisResult(
+            spec, solution, profiles.FitStatistic(2, -1, 2, 6, 8),
+            warnings=("Review tiny classes.",),
+        ),
+        profiles.ProfileAnalysisResult(
+            spec,
+            profiles.ProfileSolution(
+                3, ("a", "b", "c"), {},
+                ("a", "b", "c"), ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                {"a": 1, "b": 1, "c": 1},
+            ),
+            profiles.FitStatistic(3, -1, 3, 7, 7),
+        ),
+    )
+    report = profiles.compare_class_counts(
+        results,
+        substantive_review={
+            "selected_class_count": 2,
+            "decision": "retain two",
+            "notes": "Theory wins.",
+        },
+    )
+    assert report.selected_class_count == 2
+    assert report.decision == "retain two"
+    assert report.review_notes == "Theory wins."
+    assert "Review tiny classes." in report.warnings
+
+
+def test_profile_dependency_diagnostics_explain_optional_boundaries():
+    diagnostics = profiles.dependency_diagnostics()
+    assert "python_gaussian_mixture" in diagnostics
+    assert diagnostics["r_backend"]["available"] is False
+    assert diagnostics["r_backend"]["message"]
+    with pytest.raises(contracts.ContractError, match="R mixture backend"):
+        profiles.r_mixture_adapter(pd.DataFrame(), None)
 
 
 def test_indicator_preparation_applies_imputation_transformation_and_standardization():

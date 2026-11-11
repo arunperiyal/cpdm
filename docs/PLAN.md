@@ -63,17 +63,20 @@ models, and bootstrap indirect effects through one result contract.
 
 **Goal:** turn the profile foundation into reproducible statistical workflows.
 
-- [ ] Add a documented Python mixture-model adapter.
-- [ ] Add an optional R/backend adapter boundary with dependency diagnostics.
-- [ ] Implement class-count comparison helpers combining fit, stability, and
+- [x] Add a documented Python mixture-model adapter.
+- [x] Add an optional R/backend adapter boundary with dependency diagnostics.
+- [x] Implement class-count comparison helpers combining fit, stability, and
       recorded substantive review.
-- [ ] Add diagnostics for singular covariance, boundary estimates, local
+- [x] Add diagnostics for singular covariance, boundary estimates, local
       optima, excessive missingness, and non-convergence from real backends.
-- [ ] Add reproducibility fixtures for repeated starts, label alignment, and
+- [x] Add reproducibility fixtures for repeated starts, label alignment, and
       profile result bundles.
 
 **Exit criteria:** a profile analysis can be run end to end from a saved
 specification with a declared backend and reproducible diagnostics.
+**Complete:** the Python Gaussian-mixture backend, explicit R boundary,
+class-count review helper, backend diagnostics, and reproducibility tests are
+implemented through the existing profile runner and result writer.
 
 ## Stage 15 — Privacy, collaboration, and governance
 

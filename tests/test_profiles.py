@@ -57,3 +57,38 @@ def test_continuous_indicator_rejects_non_numeric_values():
     definition = profiles.IndicatorDefinition("score", "score")
     with pytest.raises(contracts.ContractError, match="non-numeric"):
         definition.validate_frame(pd.DataFrame({"score": ["1", "not-a-number"]}))
+
+
+def test_profile_solution_and_fit_reports_validate_and_serialize():
+    solution = profiles.ProfileSolution(
+        class_count=2,
+        class_labels=("class_1", "class_2"),
+        parameters={"means": {"class_1": [1.0], "class_2": [3.0]}},
+        assignments=("class_1", "class_2", "class_1"),
+        posterior_probabilities=(
+            (0.9, 0.1), (0.2, 0.8), (0.7, 0.3)
+        ),
+        class_sizes={"class_1": 2, "class_2": 1},
+        profile_labels={"class_1": "Lower", "class_2": "Higher"},
+    )
+    statistic = profiles.FitStatistic(
+        class_count=2, log_likelihood=-10, parameter_count=4,
+        aic=28, bic=35, entropy=0.82,
+    )
+    report = profiles.ClassSelectionReport(
+        "wellbeing_profiles", (statistic,), selected_class_count=2,
+        decision="retain two profiles", review_notes="Stable and interpretable.",
+    )
+
+    assert solution.as_dict()["class_sizes"] == {"class_1": 2, "class_2": 1}
+    assert report.as_dict()["fit_statistics"][0]["bic"] == 35
+
+
+def test_profile_solution_rejects_invalid_posteriors_and_selection():
+    with pytest.raises(contracts.ContractError, match="sum to 1"):
+        profiles.ProfileSolution(
+            2, ("a", "b"), {}, ("a",), ((0.8, 0.8),), {"a": 1, "b": 0}
+        )
+    statistic = profiles.FitStatistic(2, -1, 2, 6, 8)
+    with pytest.raises(contracts.ContractError, match="not in"):
+        profiles.ClassSelectionReport("analysis", (statistic,), selected_class_count=3)

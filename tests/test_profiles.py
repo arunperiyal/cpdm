@@ -157,3 +157,34 @@ def test_mixture_runner_rejects_unknown_backend():
     )
     with pytest.raises(contracts.ContractError, match="No mixture-analysis adapter"):
         profiles.MixtureAnalysisRunner().run(pd.DataFrame({"score": [1.0]}), spec)
+
+
+def test_indicator_preparation_applies_imputation_transformation_and_standardization():
+    spec = profiles.ProfileAnalysisSpec(
+        "prepared",
+        indicators=(
+            profiles.IndicatorDefinition(
+                "score", "raw_score", transform="zscore",
+                standardize=True, missing_policy="impute",
+            ),
+            profiles.IndicatorDefinition(
+                "group", "raw_group", measurement_level="categorical",
+                allowed_values=("a", "b"), missing_policy="impute",
+            ),
+        ),
+    )
+    prepared = spec.prepare_indicators(pd.DataFrame({
+        "raw_score": [1.0, None, 3.0],
+        "raw_group": ["a", None, "b"],
+    }))
+
+    assert list(prepared.columns) == ["score", "group"]
+    assert prepared["score"].isna().sum() == 0
+    assert prepared["group"].tolist() == ["a", "a", "b"]
+    assert round(prepared["score"].mean(), 8) == 0
+
+
+def test_indicator_preparation_rejects_missing_values_under_error_policy():
+    definition = profiles.IndicatorDefinition("score", "score", missing_policy="error")
+    with pytest.raises(contracts.ContractError, match="missing values"):
+        definition.prepare(pd.Series([1.0, None]))

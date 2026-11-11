@@ -268,11 +268,11 @@ Add reusable core/base classes:
 
 Design requirements:
 
-- [ ] Support continuous, ordinal, categorical, and mixed indicators through
+- [x] Support continuous, ordinal, categorical, and mixed indicators through
   explicit measurement metadata rather than treating every column as numeric.
-- [ ] Separate indicator preparation from model fitting so transformations are
+- [x] Separate indicator preparation from model fitting so transformations are
   recorded and can be reproduced for a second wave or new dataset.
-- [ ] Preserve observation identifiers outside the model matrix and prevent
+- [x] Preserve observation identifiers outside the model matrix and prevent
   identifiers, weights, or grouping fields from becoming indicators by
   accident.
 - [ ] Surface empty or tiny classes, boundary estimates, non-convergence,

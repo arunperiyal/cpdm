@@ -116,6 +116,39 @@ class IndicatorDefinition:
                 )
         return self
 
+    def prepare(self, series):
+        """Apply declared missing-value and numeric transformations."""
+        values = series.copy()
+        if self.missing_policy == "error" and values.isna().any():
+            raise ContractError(f"Indicator '{self.name}' contains missing values.")
+        if self.measurement_level in {"continuous", "ordinal"}:
+            values = pd.to_numeric(values, errors="coerce")
+            if self.missing_policy == "error" and values.isna().any():
+                raise ContractError(f"Indicator '{self.name}' contains non-numeric values.")
+            if self.missing_policy == "impute":
+                if values.dropna().empty:
+                    raise ContractError(f"Indicator '{self.name}' has no values to impute.")
+                values = values.fillna(values.median())
+            if self.transform == "log":
+                if (values.dropna() < 0).any():
+                    raise ContractError(f"Indicator '{self.name}' cannot apply log to negatives.")
+                values = values.map(lambda value: None if pd.isna(value) else math.log1p(value))
+            elif self.transform == "sqrt":
+                if (values.dropna() < 0).any():
+                    raise ContractError(f"Indicator '{self.name}' cannot apply sqrt to negatives.")
+                values = values.map(lambda value: None if pd.isna(value) else math.sqrt(value))
+            if self.standardize or self.transform == "zscore":
+                mean = values.mean()
+                std = values.std(ddof=0)
+                if pd.isna(std) or std == 0:
+                    raise ContractError(f"Indicator '{self.name}' cannot be standardized.")
+                values = (values - mean) / std
+        elif self.missing_policy == "impute" and values.isna().any():
+            if values.dropna().empty:
+                raise ContractError(f"Indicator '{self.name}' has no values to impute.")
+            values = values.fillna(values.mode().iloc[0])
+        return values
+
 
 @dataclass(frozen=True)
 class ProfileAnalysisSpec:
@@ -220,6 +253,15 @@ class ProfileAnalysisSpec:
         for indicator in self.indicators:
             indicator.validate_frame(frame)
         return self
+
+    def prepare_indicators(self, frame):
+        """Return only prepared indicator columns, preserving declared names."""
+        self.validate_frame(frame)
+        prepared = {
+            indicator.name: indicator.prepare(frame[indicator.source_column])
+            for indicator in self.indicators
+        }
+        return pd.DataFrame(prepared, index=frame.index)
 
 
 @dataclass(frozen=True)

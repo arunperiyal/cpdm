@@ -43,6 +43,9 @@ Useful environment variables include `CPDM_HOST`, `CPDM_PORT`, `CPDM_DEBUG`,
   JSON error format; do not silently swallow failures.
 - Keep dataset operations compatible with pandas and preserve column order and
   recorded cleaning-recipe behavior.
+- Keep analysis contracts method-agnostic: APIM and dyadic workflows are
+  supported examples, not assumptions that every dataset has partners, roles,
+  or a single cross-sectional wave.
 - Add focused regression coverage in `tests/test_workflow.py` for new or fixed
   behavior.
 - Use the existing CSS theme variables for UI colors; do not hard-code palette

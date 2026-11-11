@@ -140,8 +140,9 @@ role labels, and accidental leakage of identifiers into analysis columns.
 
 ## Stage 5 — Create an analysis and result abstraction
 
-**Goal:** provide a stable base for future APIM, mediation, moderation, and
-other statistical workflows without coupling them to the web UI.
+**Goal:** provide a stable base for descriptive, psychometric, longitudinal,
+grouped, dyadic, and other statistical workflows without coupling them to the
+web UI.
 
 Define generic interfaces:
 
@@ -156,9 +157,11 @@ Define generic interfaces:
 - [x] `ResultTable`/`ReportWriter`: stable CSV/XLSX/JSON output with human-readable
   labels and machine-readable identifiers.
 
-Use the conventions in the R analysis code as domain requirements:
+Use the existing R analysis code as one source of domain requirements, not as
+the product boundary:
 
-- actor versus partner paths must be explicit;
+- roles, groups, and repeated observations must be explicit when a method needs
+  them;
 - indirect effects need bootstrap confidence intervals rather than being
   reduced to a bare p-value;
 - moderation results should include the interaction and conditional indirect
@@ -166,15 +169,16 @@ Use the conventions in the R analysis code as domain requirements:
 - exploratory analyses must be labelled as such;
 - convergence and suspicious estimates must be surfaced, not hidden.
 
-Relevant references include
+Relevant references include the APIM examples in
 `tmp/APIM_Analysis/R/apim_models.R`,
 `tmp/APIM_Analysis/R/apimem_models.R`,
 `tmp/APIM_Analysis/R/moderated_mediation_models.R`,
 `tmp/APIM_Analysis/R/multigroup_models.R`, and
 `tmp/APIM_Analysis/R/model_utils.R`.
 
-Do not implement every APIMeM model in the first pass. Start with a
-well-tested design-matrix/result contract and one small analysis adapter.
+Do not implement every model family in the first pass. Start with a well-tested
+design-matrix/result contract and small adapters that can be added for new
+estimators without changing the result format.
 
 - [x] **Exit criteria:** an analysis can be run from a saved specification,
       produces stable machine-readable results and diagnostics, and is
@@ -194,7 +198,7 @@ well-tested design-matrix/result contract and one small analysis adapter.
 - [x] Add provenance links from every reported result back to source columns,
    scale items, transformation steps, and model specification.
 
-The reporting design should reflect
+The reporting design may borrow useful conventions from
 `tmp/APIM_Analysis/R/excel_export.R`,
 `tmp/APIM_Analysis/R/figures_common.R`, and the numbered figure scripts, but
 should keep raw results separate from presentation formatting.
@@ -220,23 +224,57 @@ workflows.
 - [ ] Add authentication and authorization before recommending non-loopback
   deployment.
 
+## Stage 8 — Generalise the analysis and data-product layer
+
+**Goal:** make CPDM useful beyond one study design while preserving transparent,
+reproducible transformations.
+
+- [ ] Add a registry for analysis adapters with capability metadata, input
+  requirements, and method-specific validation.
+- [ ] Add reusable descriptive summaries, group comparisons, repeated-measures
+  summaries, and regression adapters before adding more specialised models.
+- [ ] Add longitudinal and clustered observation keys without assuming that
+  every dataset is a dyad or a single cross-section.
+- [ ] Add explicit variable roles and provenance links for identifiers,
+  grouping fields, weights, time points, and analysis exclusions.
+- [ ] Add privacy-aware export controls for identifiers, free text, and
+  intermediate artifacts.
+- [ ] Add fixture-based compatibility checks for imported definitions and
+  result schemas so future adapters remain backwards compatible.
+
+## Stage 9 — Collaboration and extensibility
+
+**Goal:** support teams and extensions without weakening local-first safety.
+
+- [ ] Define a versioned plugin boundary for custom transformations,
+  instruments, estimators, and report components.
+- [ ] Add project-level configuration and portable bundles that can move
+  between machines without relying on process-global state.
+- [ ] Add optional authenticated collaboration only after session storage,
+  authorization, audit logging, and concurrent-edit semantics are designed.
+- [ ] Add documentation examples for non-dyadic datasets, including repeated
+  measures, experiments, and operational data.
+
 ## Suggested implementation order
 
 Prioritise **Stages 1-3** before statistical features. They reduce the risk of
 building analysis functionality on ambiguous or non-reproducible data
-transformations. Implement **Stage 4** before APIM work, then implement
-**Stage 5** incrementally with one analysis adapter and fixture-based
-validation. Finish with **Stages 6-7** as the reporting and deployment needs
-become clear.
+transformations. Implement the reusable dyad and grouping primitives before
+methods that need them, then grow Stage 5 through small adapters. Treat APIM as
+one supported example alongside other designs, not as the organizing
+architecture. Finish Stages 6-9 as reporting, deployment, and collaboration
+needs become clear.
 
 ## Decisions to make before implementation
 
 - Should instrument metadata be stored as JSON, CSV, or both?
 - Which missing-data and minimum-response rules should composites use?
-- Which participant roles and dyad identifiers are canonical?
+- Which identifiers, grouping keys, and time-point conventions should be
+  canonical across datasets?
 - Is statistical computation expected to remain Python-only, or should CPDM
-  optionally call R for methods not yet available in Python?
+  optionally call R or another engine for methods not yet available in Python?
 - Which outputs are exploratory versus confirmatory, and how should that label
   be carried into reports?
 - Is multi-user hosting in scope, or should CPDM remain a local single-user
   workspace?
+- Which privacy and retention rules should govern saved bundles and exports?

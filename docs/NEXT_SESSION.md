@@ -1,36 +1,35 @@
-# Next session handoff
+# Project handoff
 
 ## Current state
 
-- Phase 1, Phase 2, Phase 3, and Phase 4 are implemented on dependent branches.
-- Phase 4 is on `phase-4-dyads`; its PR and stack registration should be
-  completed before starting new implementation work.
-- The full test suite passes with 81 tests.
+- Phases 1–7 are merged into `main` through native stack `#3`.
+- The full local test suite passes with 89 tests.
+- Phase 7 contains operational foundations, but deployment-specific work remains
+  intentionally open in `docs/PLAN.md`.
 - Existing unrelated worktree edits remain intentionally uncommitted:
   `.gitignore` and `src/cpdm/core/groups.py`.
 
-## Pull-request stack
+## Landed pull-request stack
 
-The native stack is `#3`:
+Native stack `#3` landed in order:
 
 1. `#1` — `phase-1-foundation` → `main`
 2. `#2` — `phase-2-measurement` → `phase-1-foundation`
 3. `#4` — `phase-3-pipelines` → `phase-2-measurement`
-4. Phase 4 — `phase-4-dyads` → `phase-3-pipelines` (create and append)
+4. `#5` — `phase-4-dyads` → `phase-3-pipelines`
+5. `#6` — `phase-5-analysis` → `phase-4-dyads`
+6. `#7` — `phase-6-reporting` → `phase-5-analysis`
+7. `#8` — `phase-7-hardening` → `phase-6-reporting`
 
-Do not merge or enable auto-merge unless explicitly requested.
+## Next implementation direction
 
-## Next implementation target
+Continue from `main` with the general-purpose items in Stages 8–9:
 
-Begin Phase 5 from the Phase 4 branch after its PR is pushed:
+- add adapter capability metadata and non-dyadic descriptive/regression methods;
+- support time points, clustered observations, and explicit analysis roles;
+- improve privacy-aware bundles and portable project configuration;
+- design collaboration only after session, authorization, and audit semantics
+  are explicit.
 
-- Add `AnalysisSpec` for predictors, mediators, outcomes, moderators,
-  covariates, roles, estimators, and missing-data policy.
-- Add typed `EffectEstimate` and `AnalysisResult` objects with diagnostics,
-  warnings, convergence status, and input fingerprints.
-- Add an `AnalysisRunner` boundary and one small APIM-compatible adapter.
-- Add stable JSON/CSV/XLSX result serialization and focused tests.
-
-Follow the repository rules in `CLAUDE.md`: use a phase branch, make one
-focused five-line minimum commit per task, push the branch, and open a
-dependent pull request after the phase is complete.
+APIM remains a supported compatibility target, not the scope of the core
+architecture.

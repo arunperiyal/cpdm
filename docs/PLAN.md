@@ -112,13 +112,13 @@ analysis-specific convention.
 
 Add reusable abstractions:
 
-- [ ] `ParticipantKey` and `DyadKey` for stable participant/couple identifiers.
-- [ ] `RoleDefinition` for partner roles such as husband/wife or actor/partner.
-- [ ] `DyadTable` for validating one-row-per-participant and one-row-per-dyad
+- [x] `ParticipantKey` and `DyadKey` for stable participant/couple identifiers.
+- [x] `RoleDefinition` for partner roles such as husband/wife or actor/partner.
+- [x] `DyadTable` for validating one-row-per-participant and one-row-per-dyad
   assumptions.
-- [ ] `ReshapePlan` for long-to-wide and wide-to-long transformations with
+- [x] `ReshapePlan` for long-to-wide and wide-to-long transformations with
   explicit name templates and collision checks.
-- [ ] `DerivedVariable` for actor, partner, difference, mean, and interaction
+- [x] `DerivedVariable` for actor, partner, difference, mean, and interaction
   variables.
 
 These should capture the intent of
@@ -134,7 +134,7 @@ These should capture the intent of
 Provide diagnostics for missing partners, duplicate couple IDs, inconsistent
 role labels, and accidental leakage of identifiers into analysis columns.
 
-- [ ] **Exit criteria:** a validated dyad table can be produced from a scored
+- [x] **Exit criteria:** a validated dyad table can be produced from a scored
       participant table and round-tripped without losing identifiers or
       measures.
 

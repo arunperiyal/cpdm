@@ -87,6 +87,85 @@ class AnalysisSpec:
 
 
 @dataclass(frozen=True)
+class AnalysisCapability:
+    """Metadata describing an analysis adapter's contract."""
+
+    name: str
+    description: str
+    required_roles: tuple[str, ...] = ()
+    supported_missing_data: tuple[str, ...] = tuple(sorted(MISSING_POLICIES))
+
+    def __post_init__(self):
+        if not str(self.name).strip():
+            raise ContractError("Analysis capability name cannot be empty.")
+        object.__setattr__(self, "required_roles", _as_tuple(self.required_roles))
+        object.__setattr__(
+            self, "supported_missing_data", _as_tuple(self.supported_missing_data)
+        )
+
+    def validate(self, spec):
+        if spec.estimator != self.name:
+            raise ContractError(
+                f"Capability '{self.name}' cannot run estimator '{spec.estimator}'."
+            )
+        if spec.missing_data not in self.supported_missing_data:
+            raise ContractError(
+                f"Estimator '{self.name}' does not support missing-data policy "
+                f"'{spec.missing_data}'."
+            )
+        missing = [
+            role for role in self.required_roles
+            if not getattr(spec, role, ())
+        ]
+        if missing:
+            raise ContractError(
+                f"Estimator '{self.name}' requires: {', '.join(missing)}."
+            )
+
+    def as_dict(self):
+        return {
+            "name": self.name,
+            "description": self.description,
+            "required_roles": list(self.required_roles),
+            "supported_missing_data": list(self.supported_missing_data),
+        }
+
+
+@dataclass(frozen=True)
+class AnalysisAdapter:
+    """A callable analysis implementation paired with its capability metadata."""
+
+    capability: AnalysisCapability
+    run: object
+
+
+class AnalysisRegistry:
+    """Register and discover method-agnostic analysis adapters."""
+
+    def __init__(self):
+        self._adapters = {}
+
+    def register(self, adapter):
+        if not isinstance(adapter, AnalysisAdapter):
+            raise ContractError("Analysis adapter must be an AnalysisAdapter.")
+        name = adapter.capability.name
+        if name in self._adapters:
+            raise ContractError(f"Analysis estimator '{name}' is already registered.")
+        self._adapters[name] = adapter
+
+    def get(self, name):
+        try:
+            return self._adapters[name]
+        except KeyError:
+            raise ContractError(f"Unknown analysis estimator '{name}'.") from None
+
+    def capabilities(self):
+        return tuple(
+            adapter.capability for adapter in self._adapters.values()
+        )
+
+
+@dataclass(frozen=True)
 class EffectEstimate:
     """One named model effect and its diagnostics."""
 
@@ -145,17 +224,29 @@ class AnalysisRunner:
     """Validate an input frame and dispatch to a small analysis adapter."""
 
     def __init__(self, adapters=None):
-        self.adapters = dict(adapters or {"apim_ols": _run_apim_ols})
+        self.registry = AnalysisRegistry()
+        if adapters is None:
+            adapters = {"apim_ols": _run_apim_ols}
+        for name, function in adapters.items():
+            self.registry.register(
+                AnalysisAdapter(
+                    AnalysisCapability(
+                        name=name,
+                        description=f"{name} analysis adapter",
+                        required_roles=("predictors", "outcomes"),
+                    ),
+                    function,
+                )
+            )
 
     def run(self, frame, spec):
         if not isinstance(frame, pd.DataFrame):
             raise ContractError("Analysis input must be a pandas DataFrame.")
         if not isinstance(spec, AnalysisSpec):
             raise ContractError("AnalysisRunner requires an AnalysisSpec.")
-        adapter = self.adapters.get(spec.estimator)
-        if adapter is None:
-            raise ContractError(f"Unknown analysis estimator '{spec.estimator}'.")
-        return adapter(frame, spec)
+        adapter = self.registry.get(spec.estimator)
+        adapter.capability.validate(spec)
+        return adapter.run(frame, spec)
 
 
 class ReportWriter:

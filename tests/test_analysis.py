@@ -47,6 +47,18 @@ def test_apim_runner_returns_explicit_actor_and_partner_effects():
     assert result.input_fingerprint
 
 
+def test_analysis_registry_exposes_capabilities():
+    runner = analysis.AnalysisRunner()
+    capability = runner.registry.capabilities()[0]
+    assert capability.name == "apim_ols"
+    assert "predictors" in capability.required_roles
+    capability.validate(
+        analysis.AnalysisSpec(
+            "basic apim", predictors=("x",), outcomes=("y",)
+        )
+    )
+
+
 def test_report_writers_have_stable_table_and_json(tmp_path):
     spec = analysis.AnalysisSpec(
         "basic apim", predictors=("x",), outcomes=("y",), roles=("h", "w")

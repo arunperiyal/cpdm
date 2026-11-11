@@ -245,7 +245,7 @@ workflows.
 **Goal:** make CPDM useful beyond one study design while preserving transparent,
 reproducible transformations.
 
-- [ ] Add a registry for analysis adapters with capability metadata, input
+- [x] Add a registry for analysis adapters with capability metadata, input
   requirements, and method-specific validation.
 - [ ] Add reusable descriptive summaries, group comparisons, repeated-measures
   summaries, and regression adapters before adding more specialised models.

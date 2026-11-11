@@ -144,10 +144,34 @@ def test_mixture_runner_validates_adapter_contract_and_writes_results(tmp_path):
     profiles.ProfileResultWriter.write_csv(result, csv_path)
     profiles.ProfileResultWriter.write_xlsx(result, xlsx_path)
 
-    assert result is expected
+    assert result.metadata["input_fingerprint"]
+    assert result.metadata["seed"] == 0
     assert json.loads(json_path.read_text())["kind"] == "cpdm-profile-analysis-result"
     assert list(pd.read_csv(csv_path)["assigned_class"]) == ["low", "high"]
     assert xlsx_path.exists()
+
+
+def test_profile_diagnostics_alignment_and_distal_outcome_boundary():
+    spec = profiles.ProfileAnalysisSpec(
+        "profiles",
+        indicators=(profiles.IndicatorDefinition("score", "score"),),
+        covariates=("age",),
+        distal_outcomes=("later_score",),
+    )
+    spec.validate_frame(pd.DataFrame({
+        "score": [1.0, 2.0], "age": [20, 21], "later_score": [2.0, 3.0],
+    }))
+    solution = profiles.ProfileSolution(
+        2, ("low", "high"), {}, ("low", "high", "low", "high"),
+        ((1, 0), (0, 1), (1, 0), (0, 1)), {"low": 2, "high": 2},
+    )
+    assert solution.diagnostics()["warnings"] == ["Tiny classes below 5: {'low': 2, 'high': 2}"]
+    reversed_solution = profiles.ProfileSolution(
+        2, ("a", "b"), {}, ("a", "b", "a", "b"),
+        ((1, 0), (0, 1), (1, 0), (0, 1)), {"a": 2, "b": 2},
+    )
+    alignment = profiles.align_profile_labels(solution, reversed_solution)
+    assert alignment["agreement_rate"] == 1
 
 
 def test_mixture_runner_rejects_unknown_backend():

@@ -1,6 +1,8 @@
 """Metadata contracts for latent profiles and other mixture analyses."""
 
 from dataclasses import dataclass
+from itertools import permutations
+import hashlib
 import math
 import json
 from pathlib import Path
@@ -14,6 +16,12 @@ from cpdm.core.contracts import ContractError
 MEASUREMENT_LEVELS = {"continuous", "ordinal", "categorical"}
 MISSING_POLICIES = {"error", "drop", "impute"}
 TRANSFORMS = {"identity", "log", "sqrt", "zscore"}
+
+
+def _fingerprint(frame):
+    payload = pd.util.hash_pandas_object(frame, index=True).values.tobytes()
+    columns = json.dumps([str(column) for column in frame.columns]).encode("utf-8")
+    return hashlib.sha256(columns + payload).hexdigest()
 
 
 def _as_tuple(value):
@@ -162,6 +170,7 @@ class ProfileAnalysisSpec:
     starts: int = 20
     weights: str | None = None
     covariates: tuple[str, ...] = ()
+    distal_outcomes: tuple[str, ...] = ()
     identifier_columns: tuple[str, ...] = ()
     seed: int = 0
     exploratory: bool = True
@@ -193,6 +202,7 @@ class ProfileAnalysisSpec:
         object.__setattr__(self, "indicators", indicators)
         object.__setattr__(self, "class_counts", class_counts)
         object.__setattr__(self, "covariates", _as_tuple(self.covariates))
+        object.__setattr__(self, "distal_outcomes", _as_tuple(self.distal_outcomes))
         object.__setattr__(self, "identifier_columns", _as_tuple(self.identifier_columns))
 
         indicator_sources = set(sources)
@@ -229,6 +239,7 @@ class ProfileAnalysisSpec:
             "starts": self.starts,
             "weights": self.weights,
             "covariates": list(self.covariates),
+            "distal_outcomes": list(self.distal_outcomes),
             "identifier_columns": list(self.identifier_columns),
             "seed": self.seed,
             "exploratory": self.exploratory,
@@ -247,6 +258,19 @@ class ProfileAnalysisSpec:
             raise ContractError(
                 "Profile input is missing covariate column(s): "
                 + ", ".join(missing_covariates)
+            )
+        missing_distal = sorted(set(self.distal_outcomes) - set(frame.columns))
+        if missing_distal:
+            raise ContractError(
+                "Profile input is missing distal outcome column(s): "
+                + ", ".join(missing_distal)
+            )
+        indicator_sources = {item.source_column for item in self.indicators}
+        leaked = indicator_sources & (set(self.covariates) | set(self.distal_outcomes))
+        if leaked:
+            raise ContractError(
+                "Covariates and distal outcomes cannot also be profile indicators: "
+                + ", ".join(sorted(leaked))
             )
         if self.weights and self.weights not in frame.columns:
             raise ContractError(f"Profile input is missing weight column '{self.weights}'.")
@@ -321,6 +345,17 @@ class ProfileSolution:
             "class_sizes": dict(self.class_sizes),
             "profile_labels": dict(self.profile_labels),
         }
+
+    def diagnostics(self, minimum_class_size=5):
+        """Return review warnings without assigning substantive class meaning."""
+        if minimum_class_size < 1:
+            raise ContractError("Minimum class size must be positive.")
+        tiny = {
+            label: size for label, size in self.class_sizes.items()
+            if size < minimum_class_size
+        }
+        warnings = [f"Tiny classes below {minimum_class_size}: {tiny}"] if tiny else []
+        return {"warnings": warnings, "tiny_classes": tiny}
 
 
 @dataclass(frozen=True)
@@ -478,6 +513,32 @@ class ProfileAnalysisResult:
         }
 
 
+def align_profile_labels(reference, candidate):
+    """Return an explicit candidate-to-reference label alignment."""
+    if reference.class_count != candidate.class_count:
+        raise ContractError("Profile solutions must have equal class counts to align.")
+    if len(reference.assignments) != len(candidate.assignments):
+        raise ContractError("Profile assignments must have equal lengths to align.")
+    best_mapping = {}
+    best_score = -1
+    for ordering in permutations(reference.class_labels):
+        mapping = dict(zip(candidate.class_labels, ordering))
+        score = sum(
+            mapping[candidate_label] == reference_label
+            for candidate_label, reference_label in zip(
+                candidate.assignments, reference.assignments
+            )
+        )
+        if score > best_score:
+            best_score = score
+            best_mapping = mapping
+    return {
+        "mapping": best_mapping,
+        "agreement_rate": best_score / len(reference.assignments)
+        if reference.assignments else 0.0,
+    }
+
+
 class MixtureAnalysisRunner:
     """Validate profile inputs and dispatch to a registered backend adapter."""
 
@@ -501,7 +562,21 @@ class MixtureAnalysisRunner:
         result = adapter(frame, spec)
         if not isinstance(result, ProfileAnalysisResult):
             raise ContractError("Mixture-analysis adapters must return ProfileAnalysisResult.")
-        return result
+        diagnostics = result.solution.diagnostics()
+        return ProfileAnalysisResult(
+            spec=result.spec,
+            solution=result.solution,
+            fit_statistic=result.fit_statistic,
+            stability=result.stability,
+            warnings=tuple(dict.fromkeys((*result.warnings, *diagnostics["warnings"]))),
+            metadata={
+                **result.metadata,
+                "input_fingerprint": _fingerprint(frame),
+                "seed": spec.seed,
+                "estimator": spec.estimator,
+                "backend_version": getattr(adapter, "__version__", "unknown"),
+            },
+        )
 
 
 class ProfileResultWriter:
@@ -542,6 +617,10 @@ class ProfileResultWriter:
             pd.DataFrame([result.fit_statistic.as_dict()]).to_excel(
                 writer, sheet_name="fit", index=False
             )
+            pd.DataFrame(
+                [{"parameter": key, "value": value}
+                 for key, value in result.solution.parameters.items()]
+            ).to_excel(writer, sheet_name="parameters", index=False)
             pd.DataFrame([{"warning": warning} for warning in result.warnings]).to_excel(
                 writer, sheet_name="warnings", index=False
             )

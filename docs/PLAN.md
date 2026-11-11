@@ -291,18 +291,18 @@ Design requirements:
 - [x] Preserve observation identifiers outside the model matrix and prevent
   identifiers, weights, or grouping fields from becoming indicators by
   accident.
-- [ ] Surface empty or tiny classes, boundary estimates, non-convergence,
+- [x] Surface empty or tiny classes, boundary estimates, non-convergence,
   local solutions, singular covariance structures, and excessive missingness.
-- [ ] Keep class labels stable only through explicit alignment; never assume
+- [x] Keep class labels stable only through explicit alignment; never assume
   that numeric class labels have substantive meaning across runs.
-- [ ] Treat the number of profiles as an evidence-informed decision combining
+- [x] Treat the number of profiles as an evidence-informed decision combining
   fit statistics, stability, interpretability, and substantive review.
-- [ ] Allow covariates and distal outcomes to be represented without leaking
+- [x] Allow covariates and distal outcomes to be represented without leaking
   post-classification variables into the indicator-fitting step.
-- [ ] Record seeds, software/backend versions, input fingerprints, and all
+- [x] Record seeds, software/backend versions, input fingerprints, and all
   model-selection decisions in the result provenance.
 
-- [ ] **Exit criteria:** a saved profile specification can prepare validated
+- [x] **Exit criteria:** a saved profile specification can prepare validated
       indicators, compare multiple class-count solutions, produce assignments
       and diagnostics, and export a result bundle without HTTP or UI state.
 

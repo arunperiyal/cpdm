@@ -259,7 +259,7 @@ Add reusable core/base classes:
   likelihood-ratio comparisons, and admissibility warnings.
 - [x] `ClassSelectionReport`: comparable solutions across class counts with
   explicit selection criteria and a human review record.
-- [ ] `ProfileStabilityReport`: repeated-start agreement, bootstrap or
+- [x] `ProfileStabilityReport`: repeated-start agreement, bootstrap or
   resampling stability, label-alignment diagnostics, and sensitivity results.
 - [ ] `MixtureAnalysisRunner`: a method-agnostic runner boundary that can
   dispatch to Python, R, or another statistical backend.

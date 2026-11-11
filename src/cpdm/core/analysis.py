@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from numpy.random import default_rng
 
 import numpy as np
 import pandas as pd
@@ -42,6 +43,11 @@ class AnalysisSpec:
     moderators: tuple[str, ...] = ()
     covariates: tuple[str, ...] = ()
     roles: tuple[str, ...] = ()
+    subject: str | None = None
+    time: str | None = None
+    cluster: str | None = None
+    weights: str | None = None
+    seed: int = 0
     estimator: str = "apim_ols"
     missing_data: str = "complete_case"
     exploratory: bool = False
@@ -80,6 +86,11 @@ class AnalysisSpec:
             "moderators": list(self.moderators),
             "covariates": list(self.covariates),
             "roles": list(self.roles),
+            "subject": self.subject,
+            "time": self.time,
+            "cluster": self.cluster,
+            "weights": self.weights,
+            "seed": self.seed,
             "estimator": self.estimator,
             "missing_data": self.missing_data,
             "exploratory": self.exploratory,
@@ -229,14 +240,34 @@ class AnalysisRunner:
             adapters = {
                 "apim_ols": _run_apim_ols,
                 "linear_regression": _run_linear_regression,
+                "weighted_regression": _run_weighted_regression,
+                "clustered_regression": _run_clustered_regression,
+                "longitudinal_regression": _run_longitudinal_regression,
+                "repeated_measures_regression": _run_repeated_measures_regression,
+                "bootstrap_indirect": _run_bootstrap_indirect,
             }
         for name, function in adapters.items():
+            required = {
+                "weighted_regression": ("predictors", "outcomes", "weights"),
+                "clustered_regression": ("predictors", "outcomes", "cluster"),
+                "longitudinal_regression": ("predictors", "outcomes", "subject", "time"),
+                "repeated_measures_regression": (
+                    "predictors", "outcomes", "subject", "time"
+                ),
+                "bootstrap_indirect": ("predictors", "mediators", "outcomes"),
+            }.get(name, ("predictors", "outcomes"))
+            supported_missing_data = (
+                ("complete_case",)
+                if name == "bootstrap_indirect"
+                else tuple(sorted(MISSING_POLICIES))
+            )
             self.registry.register(
                 AnalysisAdapter(
                     AnalysisCapability(
                         name=name,
                         description=f"{name} analysis adapter",
-                        required_roles=("predictors", "outcomes"),
+                        required_roles=required,
+                        supported_missing_data=supported_missing_data,
                     ),
                     function,
                 )
@@ -250,6 +281,9 @@ class AnalysisRunner:
         adapter = self.registry.get(spec.estimator)
         adapter.capability.validate(spec)
         return adapter.run(frame, spec)
+
+    def capability_metadata(self):
+        return [capability.as_dict() for capability in self.registry.capabilities()]
 
 
 def descriptive_summary(frame, columns=None, group_by=None):
@@ -335,6 +369,170 @@ def _run_linear_regression(frame, spec):
                 diagnostics={"n": int(len(selected))},
             ))
     return AnalysisResult(spec, estimates, _fingerprint(frame))
+
+
+def _validate_columns(frame, columns, label="Analysis"):
+    requested = [column for column in columns if column]
+    missing = sorted(set(requested) - set(frame.columns))
+    if missing:
+        raise ContractError(f"{label} columns missing: " + ", ".join(missing))
+
+
+def _run_weighted_regression(frame, spec):
+    if not spec.weights:
+        raise ContractError("Weighted regression requires a weights column.")
+    _validate_columns(
+        frame, [*spec.predictors, *spec.outcomes, spec.weights], "Weighted regression"
+    )
+    estimates = []
+    for outcome in spec.outcomes:
+        selected = frame[[*spec.predictors, outcome, spec.weights]].apply(
+            pd.to_numeric, errors="coerce"
+        ).dropna()
+        if (selected[spec.weights] <= 0).any():
+            raise ContractError("Regression weights must be positive.")
+        x = np.column_stack([np.ones(len(selected)), selected[list(spec.predictors)]])
+        weight = np.sqrt(selected[spec.weights].to_numpy())
+        coefficients, *_ = np.linalg.lstsq(
+            x * weight[:, None], selected[outcome].to_numpy() * weight, rcond=None
+        )
+        for predictor, coefficient in zip(spec.predictors, coefficients[1:]):
+            estimates.append(EffectEstimate(
+                path=f"{predictor}->{outcome}",
+                estimate=float(coefficient),
+                role="weighted_regression",
+                diagnostics={"n": int(len(selected)), "weights": spec.weights},
+            ))
+    return AnalysisResult(spec, estimates, _fingerprint(frame))
+
+
+def _run_clustered_regression(frame, spec):
+    if not spec.cluster:
+        raise ContractError("Clustered regression requires a cluster column.")
+    _validate_columns(
+        frame, [*spec.predictors, *spec.outcomes, spec.cluster], "Clustered regression"
+    )
+    result = _run_linear_regression(frame, spec)
+    clusters = frame[spec.cluster].dropna().nunique()
+    if clusters < 2:
+        raise ContractError("Clustered regression requires at least two clusters.")
+    result.estimates = [
+        EffectEstimate(
+            path=estimate.path,
+            estimate=estimate.estimate,
+            standard_error=estimate.standard_error,
+            confidence_interval=estimate.confidence_interval,
+            p_value=estimate.p_value,
+            role="clustered_regression",
+            diagnostics={
+                **estimate.diagnostics,
+                "cluster": spec.cluster,
+                "cluster_count": int(clusters),
+            },
+        )
+        for estimate in result.estimates
+    ]
+    return result
+
+
+def _run_longitudinal_regression(frame, spec):
+    if not spec.subject or not spec.time:
+        raise ContractError("Longitudinal regression requires subject and time columns.")
+    _validate_columns(
+        frame, [*spec.predictors, *spec.outcomes, spec.subject, spec.time],
+        "Longitudinal regression",
+    )
+    if frame.duplicated([spec.subject, spec.time]).any():
+        raise ContractError("Longitudinal observations must be unique by subject and time.")
+    result = _run_linear_regression(frame, spec)
+    result.estimates = [
+        EffectEstimate(
+            path=estimate.path,
+            estimate=estimate.estimate,
+            standard_error=estimate.standard_error,
+            confidence_interval=estimate.confidence_interval,
+            p_value=estimate.p_value,
+            role="longitudinal_regression",
+            diagnostics={
+                **estimate.diagnostics,
+                "subject": spec.subject,
+                "time": spec.time,
+            },
+        )
+        for estimate in result.estimates
+    ]
+    return result
+
+
+def _run_repeated_measures_regression(frame, spec):
+    result = _run_longitudinal_regression(frame, spec)
+    result.estimates = [
+        EffectEstimate(
+            path=estimate.path,
+            estimate=estimate.estimate,
+            standard_error=estimate.standard_error,
+            confidence_interval=estimate.confidence_interval,
+            p_value=estimate.p_value,
+            role="repeated_measures_regression",
+            diagnostics={**estimate.diagnostics, "repeated_measures": True},
+        )
+        for estimate in result.estimates
+    ]
+    return result
+
+
+def _run_bootstrap_indirect(frame, spec):
+    if len(spec.predictors) != 1 or len(spec.mediators) != 1 or len(spec.outcomes) != 1:
+        raise ContractError("Indirect effects require one predictor, mediator, and outcome.")
+    predictor, mediator, outcome = spec.predictors[0], spec.mediators[0], spec.outcomes[0]
+    _validate_columns(frame, [predictor, mediator, outcome], "Indirect-effect")
+    selected = frame[[predictor, mediator, outcome]].apply(
+        pd.to_numeric, errors="coerce"
+    ).dropna()
+    if len(selected) < 3:
+        raise ContractError("Indirect effects require at least three complete rows.")
+    rng = default_rng(spec.seed)
+    effects = []
+    for _ in range(500):
+        sample = selected.iloc[rng.integers(0, len(selected), len(selected))]
+        try:
+            a = _slope(sample[predictor].to_numpy(), sample[mediator].to_numpy())
+            b = _slope(sample[mediator].to_numpy(), sample[outcome].to_numpy())
+        except ContractError:
+            continue
+        effects.append(a * b)
+    if len(effects) < 100:
+        raise ContractError("Too many degenerate bootstrap samples for an interval.")
+    observed_a = _slope(selected[predictor], selected[mediator])
+    observed_b = _slope(selected[mediator], selected[outcome])
+    ci = (float(np.quantile(effects, 0.025)), float(np.quantile(effects, 0.975)))
+    warnings = []
+    if len(effects) < 500:
+        warnings.append(
+            f"{500 - len(effects)} degenerate bootstrap samples were omitted."
+        )
+    return AnalysisResult(
+        spec,
+        [EffectEstimate(
+            path=f"{predictor}->{mediator}->{outcome}",
+            estimate=float(observed_a * observed_b),
+            confidence_interval=ci,
+            role="indirect_effect",
+            diagnostics={"bootstrap_replicates": 500, "seed": spec.seed},
+        )],
+        _fingerprint(frame),
+        warnings=warnings,
+    )
+
+
+def _slope(x, y):
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    centered = x - x.mean()
+    denominator = np.dot(centered, centered)
+    if denominator == 0:
+        raise ContractError("Cannot estimate a slope from a constant variable.")
+    return float(np.dot(centered, y - y.mean()) / denominator)
 
 
 class ReportWriter:

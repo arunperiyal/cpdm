@@ -44,18 +44,20 @@ usage.
 
 **Goal:** add useful methods without weakening the stable adapter contract.
 
-- [ ] Add weighted and clustered regression adapters with explicit observation
+- [x] Add weighted and clustered regression adapters with explicit observation
       and weight requirements.
-- [ ] Add repeated-measures and longitudinal model adapters with time and
+- [x] Add repeated-measures and longitudinal model adapters with time and
       subject validation.
-- [ ] Add bootstrap and indirect-effect adapters with reproducible seeds and
+- [x] Add bootstrap and indirect-effect adapters with reproducible seeds and
       confidence intervals.
-- [ ] Add adapter capability discovery to the API and portable project bundles.
-- [ ] Add backend conformance tests covering errors, warnings, provenance, and
+- [x] Add adapter capability discovery to the API and portable project bundles.
+- [x] Add backend conformance tests covering errors, warnings, provenance, and
       result serialization.
 
 **Exit criteria:** at least two non-dyadic and one dyadic analysis families
-run through the same registry and result writer.
+run through the same registry and result writer. **Complete:** the registry
+now covers dyadic APIM, regression families, repeated measures/longitudinal
+models, and bootstrap indirect effects through one result contract.
 
 ## Stage 14 — Production latent-profile backends
 

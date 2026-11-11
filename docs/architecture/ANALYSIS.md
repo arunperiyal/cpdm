@@ -17,7 +17,18 @@ boundary.
 
 Reusable summaries cover descriptive statistics, two-group comparisons,
 repeated-measures summaries, and a transparent linear-regression adapter.
-Additional methods should register through the same capability boundary.
+The registry also includes weighted regression, clustered regression,
+longitudinal and repeated-measures regression, and seeded bootstrap indirect
+effects. Weighted, clustered, and longitudinal adapters require explicit
+weights, cluster, subject, and time columns respectively; bootstrap indirect
+effects expose reproducible seeds, confidence intervals, and warnings for
+degenerate resamples. Capability metadata is available through the analysis
+API and can be preserved in portable project configurations.
+
+All adapters return the same `AnalysisResult` contract with an input
+fingerprint, serialized specification, diagnostics, warnings, and stable
+effect estimates. Adapter-specific unsupported policies or missing required
+columns fail with `ContractError` before model execution.
 
 ## Latent profiles
 

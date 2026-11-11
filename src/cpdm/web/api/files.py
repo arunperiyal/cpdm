@@ -3,6 +3,7 @@
 from flask import Blueprint, current_app, jsonify, request, send_file
 
 from cpdm.core import services, state
+from cpdm.core.analysis import AnalysisRunner
 from cpdm.core.operations import UploadPolicy
 from cpdm.core.sessions import LocalSessionStore
 from cpdm.web.api.support import api_route, uploaded_file
@@ -28,6 +29,11 @@ def export():
 @api_route(bp, "/get_state", methods=["GET"])
 def get_state():
     return jsonify(state.session.state())
+
+
+@api_route(bp, "/analysis/capabilities", methods=["GET"])
+def analysis_capabilities():
+    return jsonify({"capabilities": AnalysisRunner().capability_metadata()})
 
 
 @api_route(bp, "/sessions", methods=["POST"])

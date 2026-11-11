@@ -20,7 +20,11 @@ def test_plugin_registry_validates_and_discovers_extensions():
 
 def test_portable_bundle_and_revision_guard(tmp_path):
     path = tmp_path / "project.cpdm.zip"
-    config = project.ProjectConfig("demo", documents=("pipeline.json",))
+    config = project.ProjectConfig(
+        "demo",
+        documents=("pipeline.json",),
+        analysis_capabilities=({"name": "linear_regression"},),
+    )
     project.PortableBundle.write(path, config, {"pipeline.json": b"{}"})
     restored, files = project.PortableBundle.read(path)
     assert restored == config

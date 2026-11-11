@@ -16,16 +16,21 @@ class ProjectConfig:
     name: str
     schema_version: int = 1
     documents: tuple[str, ...] = ()
+    analysis_capabilities: tuple[dict, ...] = ()
     settings: dict = field(default_factory=dict)
 
     def __post_init__(self):
         object.__setattr__(self, "documents", tuple(self.documents))
+        object.__setattr__(
+            self, "analysis_capabilities", tuple(self.analysis_capabilities)
+        )
 
     def as_dict(self):
         return {
             "name": self.name,
             "schema_version": self.schema_version,
             "documents": list(self.documents),
+            "analysis_capabilities": list(self.analysis_capabilities),
             "settings": dict(self.settings),
         }
 

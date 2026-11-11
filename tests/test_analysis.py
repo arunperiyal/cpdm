@@ -83,6 +83,102 @@ def test_summary_comparison_repeated_measures_and_regression_adapters():
     assert result.estimates[0].estimate == pytest.approx(2.0)
 
 
+def test_weighted_clustered_longitudinal_and_bootstrap_adapters():
+    frame = pd.DataFrame({
+        "subject": ["a", "a", "b", "b", "c", "c"],
+        "time": [1, 2, 1, 2, 1, 2],
+        "cluster": ["x", "x", "y", "y", "z", "z"],
+        "weight": [1, 2, 1, 2, 1, 2],
+        "x": [1, 2, 2, 4, 3, 6],
+        "m": [2, 3, 4, 6, 6, 9],
+        "y": [3, 4, 6, 9, 9, 13],
+    })
+    runner = analysis.AnalysisRunner()
+    weighted = runner.run(
+        frame,
+        analysis.AnalysisSpec(
+            "weighted", predictors=("x",), outcomes=("y",),
+            estimator="weighted_regression", weights="weight",
+        ),
+    )
+    clustered = runner.run(
+        frame,
+        analysis.AnalysisSpec(
+            "clustered", predictors=("x",), outcomes=("y",),
+            estimator="clustered_regression", cluster="cluster",
+        ),
+    )
+    longitudinal = runner.run(
+        frame,
+        analysis.AnalysisSpec(
+            "longitudinal", predictors=("x",), outcomes=("y",),
+            estimator="longitudinal_regression", subject="subject", time="time",
+        ),
+    )
+    repeated = runner.run(
+        frame,
+        analysis.AnalysisSpec(
+            "repeated", predictors=("x",), outcomes=("y",),
+            estimator="repeated_measures_regression", subject="subject", time="time",
+        ),
+    )
+    indirect = runner.run(
+        frame,
+        analysis.AnalysisSpec(
+            "indirect", predictors=("x",), mediators=("m",), outcomes=("y",),
+            estimator="bootstrap_indirect", exploratory=True, roles=("bootstrap",),
+            seed=42,
+        ),
+    )
+    assert weighted.estimates[0].role == "weighted_regression"
+    assert clustered.estimates[0].diagnostics["cluster_count"] == 3
+    assert longitudinal.estimates[0].diagnostics["subject"] == "subject"
+    assert repeated.estimates[0].role == "repeated_measures_regression"
+    assert indirect.estimates[0].confidence_interval is not None
+    assert indirect.as_dict()["spec"]["seed"] == 42
+    assert indirect.input_fingerprint
+    assert indirect.warnings
+
+
+def test_backend_capabilities_are_discoverable():
+    names = {item["name"] for item in analysis.AnalysisRunner().capability_metadata()}
+    assert {
+        "weighted_regression",
+        "clustered_regression",
+        "longitudinal_regression",
+        "repeated_measures_regression",
+    } <= names
+
+
+def test_backend_contracts_report_actionable_errors():
+    frame = pd.DataFrame({"x": [1, 2], "y": [2, 4]})
+    runner = analysis.AnalysisRunner()
+    with pytest.raises(contracts.ContractError, match="weights"):
+        runner.run(
+            frame,
+            analysis.AnalysisSpec(
+                "weighted", predictors=("x",), outcomes=("y",),
+                estimator="weighted_regression",
+            ),
+        )
+    with pytest.raises(contracts.ContractError, match="subject, time"):
+        runner.run(
+            frame,
+            analysis.AnalysisSpec(
+                "longitudinal", predictors=("x",), outcomes=("y",),
+                estimator="longitudinal_regression",
+            ),
+        )
+    with pytest.raises(contracts.ContractError, match="missing-data"):
+        runner.run(
+            frame,
+            analysis.AnalysisSpec(
+                "indirect", predictors=("x",), mediators=("x",), outcomes=("y",),
+                estimator="bootstrap_indirect", missing_data="pairwise",
+            ),
+        )
+
+
 def test_report_writers_have_stable_table_and_json(tmp_path):
     spec = analysis.AnalysisSpec(
         "basic apim", predictors=("x",), outcomes=("y",), roles=("h", "w")

@@ -159,6 +159,13 @@ def test_api_requires_bearer_token_when_enabled():
     assert allowed.status_code == 200
 
 
+def test_analysis_capabilities_endpoint_lists_registered_adapters():
+    client = fresh_client()
+    payload = client.get("/api/analysis/capabilities").get_json()
+    names = {item["name"] for item in payload["capabilities"]}
+    assert "bootstrap_indirect" in names
+
+
 def test_persisted_session_context_is_isolated_from_default_session(tmp_path):
     state.reset()
     app = create_app(TESTING=True, CPDM_SESSION_ROOT=str(tmp_path / "sessions"))

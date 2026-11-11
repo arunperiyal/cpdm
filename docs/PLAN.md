@@ -101,16 +101,19 @@ and secure-default boundaries are implemented and covered by tests.
 
 **Goal:** make extensions discoverable, maintainable, and useful to teams.
 
-- [ ] Add plugin discovery from signed or explicitly trusted project manifests.
-- [ ] Add compatibility checks for plugin API versions and dependency ranges.
-- [ ] Add project templates and examples for surveys, experiments, repeated
+- [x] Add plugin discovery from signed or explicitly trusted project manifests.
+- [x] Add compatibility checks for plugin API versions and dependency ranges.
+- [x] Add project templates and examples for surveys, experiments, repeated
       measures, operational data, and dyadic studies.
-- [ ] Add generated API/core architecture documentation from supported schemas.
-- [ ] Add release checklists for migrations, fixtures, privacy, and reproducible
+- [x] Add generated API/core architecture documentation from supported schemas.
+- [x] Add release checklists for migrations, fixtures, privacy, and reproducible
       report bundles.
 
 **Exit criteria:** a new trusted adapter can be installed, validated, documented,
 and used in a portable project without route-specific code changes.
+**Complete:** trusted manifests validate plugin API/dependency compatibility,
+templates cover the supported analysis families, schema documentation is
+checked against the canonical registry, and release governance is documented.
 
 ## Guiding decisions
 

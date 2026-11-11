@@ -9,6 +9,9 @@
   progress reporting.
 - Non-loopback launcher bindings require a bearer token.
 - `VersionedDocument` supplies explicit schema validation and migration hooks.
+- `JobSpec` requires JSON-serializable inputs, while `CancellationToken` and
+  `JobCancelled` define cooperative cancellation for scoring, reliability,
+  bootstrap, and report adapters.
 - CI runs the test suite, bytecode compilation, and API smoke coverage.
 
 ## Deferred work
@@ -23,8 +26,9 @@ The following are intentionally not treated as complete:
    before one migration registry can govern them all.
 4. Formatting, type checking, and documentation validation need supported tools
    added to the project dependencies.
-5. Multi-user sessions need durable storage, authorization scope, and concurrent
-   edit semantics; the current process-global state remains single-user.
+5. Multi-user sessions still need durable authorization scope and broader
+   concurrent-edit semantics; the local session context is opt-in and the
+   process-global mode remains the default.
 
 These items are the first candidates in the next roadmap rather than hidden
 assumptions in the current implementation.

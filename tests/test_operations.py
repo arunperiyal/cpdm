@@ -51,6 +51,26 @@ def test_job_executor_reports_completion_and_failure():
         assert executor.wait(failed)["status"] == "failed"
 
 
+def test_job_executor_supports_cooperative_cancellation():
+    def work(cancellation):
+        import time
+        while not cancellation.cancelled:
+            time.sleep(0.001)
+        cancellation.check()
+
+    with operations.JobExecutor() as executor:
+        job_id = executor.submit("cancel", work)
+        executor.cancel(job_id)
+        assert executor.wait(job_id)["status"] == "cancelled"
+
+
+def test_job_spec_requires_serializable_inputs():
+    spec = operations.JobSpec("report", {"format": "xlsx"})
+    assert spec.payload["format"] == "xlsx"
+    with pytest.raises(contracts.ContractError, match="JSON serializable"):
+        operations.JobSpec("report", {"bad": object()})
+
+
 def test_run_with_timeout_enforces_positive_deadline():
     assert operations.run_with_timeout(lambda: 3, 1) == 3
     with pytest.raises(TimeoutError, match="timeout"):

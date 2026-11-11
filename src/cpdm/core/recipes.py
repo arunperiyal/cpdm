@@ -15,6 +15,7 @@ import io
 import json
 
 from cpdm.core import cleaning
+from cpdm.core.contracts import validate_recipe
 
 RECIPE_FILENAME = "cleaning_rules.json"
 
@@ -22,6 +23,12 @@ OP_TEXT_RULES = "text_rules"
 OP_HEADER_MAP = "header_map"
 OP_VALUE_REPLACEMENTS = "value_replacements"
 OP_EXACT_VALUES = "exact_values"
+OPERATIONS = {
+    OP_TEXT_RULES,
+    OP_HEADER_MAP,
+    OP_VALUE_REPLACEMENTS,
+    OP_EXACT_VALUES,
+}
 
 
 def export_rules(dataset):
@@ -101,19 +108,23 @@ def _replay_flat(dataset, rules_data):
 def apply_rules(dataset, rules_data):
     """Replay a saved recipe against the currently loaded dataset."""
     dataset.require_df()
-
-    if not isinstance(rules_data, dict):
-        raise ValueError("Cleaning file must contain a JSON object.")
+    validate_recipe(rules_data)
 
     steps = rules_data.get("steps")
     if steps:
-        if not isinstance(steps, list):
-            raise ValueError("'steps' must be a list of operations.")
         result = _replay_steps(dataset, steps)
     else:
         result = _replay_flat(dataset, rules_data)
 
     result["cols"] = list(dataset.df.columns)
+    result["operation"] = "apply_cleaning_rules"
+    result["changed"] = bool(
+        result.get("headers_changed")
+        or result.get("cells_changed")
+        or result.get("columns_replaced")
+    )
+    result.setdefault("warnings", [])
+    result["provenance"] = {"source_filename": dataset.filename}
     # kept for the log line the browser prints
     result.setdefault("headers_changed", 0)
     result.setdefault("columns_replaced", len(rules_data.get("value_replacements", {})))

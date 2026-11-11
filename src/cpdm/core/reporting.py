@@ -8,6 +8,7 @@ import pandas as pd
 
 from cpdm.core.analysis import AnalysisResult, ReportWriter
 from cpdm.core.contracts import ContractError
+from cpdm.core.governance import ExportPolicy
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,21 @@ class PrivacyPolicy:
             if column in result:
                 result[column] = self.replacement
         return result
+
+    def as_export_policy(self):
+        """Return the field-level policy equivalent of this legacy helper."""
+        from cpdm.core.governance import FieldClassification
+
+        return ExportPolicy(
+            fields=tuple(
+                FieldClassification(column, "restricted", "drop")
+                for column in self.drop_columns
+            ) + tuple(
+                FieldClassification(column, "restricted", "redact")
+                for column in self.redact_columns
+            ),
+            replacement=self.replacement,
+        )
 
 
 @dataclass(frozen=True)

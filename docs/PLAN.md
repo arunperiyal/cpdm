@@ -82,17 +82,20 @@ implemented through the existing profile runner and result writer.
 
 **Goal:** support controlled sharing without weakening local safety.
 
-- [ ] Add field-level privacy classifications and configurable export policies
+- [x] Add field-level privacy classifications and configurable export policies
       for identifiers, free text, weights, and intermediate artifacts.
-- [ ] Add scoped authentication and authorization for sessions, projects,
+- [x] Add scoped authentication and authorization for sessions, projects,
       bundles, and audit events.
-- [ ] Add durable audit storage and conflict resolution for collaborative edits.
-- [ ] Add redaction previews and retention/deletion operations for portable
+- [x] Add durable audit storage and conflict resolution for collaborative edits.
+- [x] Add redaction previews and retention/deletion operations for portable
       bundles.
-- [ ] Threat-model non-loopback deployment and document secure defaults.
+- [x] Threat-model non-loopback deployment and document secure defaults.
 
 **Exit criteria:** a reviewed collaboration workflow has authenticated actors,
 auditable changes, conflict behavior, and tested privacy-preserving exports.
+**Complete:** field-level export controls, scoped authorization, durable audit
+events, explicit conflict resolution, bundle redaction/retention operations,
+and secure-default boundaries are implemented and covered by tests.
 
 ## Stage 16 — Extension quality and user-facing products
 

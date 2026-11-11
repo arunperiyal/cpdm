@@ -247,15 +247,15 @@ reproducible transformations.
 
 - [x] Add a registry for analysis adapters with capability metadata, input
   requirements, and method-specific validation.
-- [ ] Add reusable descriptive summaries, group comparisons, repeated-measures
+- [x] Add reusable descriptive summaries, group comparisons, repeated-measures
   summaries, and regression adapters before adding more specialised models.
-- [ ] Add longitudinal and clustered observation keys without assuming that
+- [x] Add longitudinal and clustered observation keys without assuming that
   every dataset is a dyad or a single cross-section.
-- [ ] Add explicit variable roles and provenance links for identifiers,
+- [x] Add explicit variable roles and provenance links for identifiers,
   grouping fields, weights, time points, and analysis exclusions.
-- [ ] Add privacy-aware export controls for identifiers, free text, and
+- [x] Add privacy-aware export controls for identifiers, free text, and
   intermediate artifacts.
-- [ ] Add fixture-based compatibility checks for imported definitions and
+- [x] Add fixture-based compatibility checks for imported definitions and
   result schemas so future adapters remain backwards compatible.
 
 ## Stage 9 — Add a latent profile analysis foundation

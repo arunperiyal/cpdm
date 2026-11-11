@@ -226,7 +226,10 @@ class AnalysisRunner:
     def __init__(self, adapters=None):
         self.registry = AnalysisRegistry()
         if adapters is None:
-            adapters = {"apim_ols": _run_apim_ols}
+            adapters = {
+                "apim_ols": _run_apim_ols,
+                "linear_regression": _run_linear_regression,
+            }
         for name, function in adapters.items():
             self.registry.register(
                 AnalysisAdapter(
@@ -247,6 +250,91 @@ class AnalysisRunner:
         adapter = self.registry.get(spec.estimator)
         adapter.capability.validate(spec)
         return adapter.run(frame, spec)
+
+
+def descriptive_summary(frame, columns=None, group_by=None):
+    """Return stable descriptive summaries for numeric variables."""
+    if not isinstance(frame, pd.DataFrame):
+        raise ContractError("Descriptive summaries require a pandas DataFrame.")
+    columns = list(columns or frame.select_dtypes(include="number").columns)
+    missing = sorted(set(columns) - set(frame.columns))
+    if missing:
+        raise ContractError("Unknown summary column(s): " + ", ".join(missing))
+    grouped = frame.groupby(group_by, dropna=False) if group_by else [(None, frame)]
+    rows = []
+    for group, subset in grouped:
+        for column in columns:
+            values = pd.to_numeric(subset[column], errors="coerce").dropna()
+            rows.append({
+                "group": group,
+                "variable": column,
+                "n": int(values.size),
+                "mean": float(values.mean()) if len(values) else None,
+                "std": float(values.std(ddof=1)) if len(values) > 1 else None,
+                "min": float(values.min()) if len(values) else None,
+                "max": float(values.max()) if len(values) else None,
+            })
+    return pd.DataFrame(rows)
+
+
+def compare_groups(frame, value, group):
+    """Compare two groups with transparent descriptive effect statistics."""
+    if value not in frame or group not in frame:
+        raise ContractError("Group comparisons require value and group columns.")
+    levels = list(frame[group].dropna().unique())
+    if len(levels) != 2:
+        raise ContractError("Group comparisons require exactly two groups.")
+    samples = [
+        pd.to_numeric(frame.loc[frame[group] == level, value], errors="coerce").dropna()
+        for level in levels
+    ]
+    means = [float(sample.mean()) if len(sample) else None for sample in samples]
+    return {
+        "value": value,
+        "group": group,
+        "levels": [str(level) for level in levels],
+        "n": [int(len(sample)) for sample in samples],
+        "means": means,
+        "mean_difference": means[0] - means[1] if all(item is not None for item in means) else None,
+    }
+
+
+def repeated_measures_summary(frame, subject, time, value):
+    """Summarize a repeated-measures variable by time point."""
+    required = {subject, time, value}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ContractError("Repeated-measures columns missing: " + ", ".join(missing))
+    result = (
+        frame.assign(_value=pd.to_numeric(frame[value], errors="coerce"))
+        .groupby(time, dropna=False)
+        .agg(n=("_value", "count"), mean=("_value", "mean"), std=("_value", "std"))
+        .reset_index()
+    )
+    return result
+
+
+def _run_linear_regression(frame, spec):
+    columns = [*spec.predictors, *spec.outcomes]
+    missing = sorted(set(columns) - set(frame.columns))
+    if missing:
+        raise ContractError("Analysis columns missing: " + ", ".join(missing))
+    estimates = []
+    for outcome in spec.outcomes:
+        selected = frame[[*spec.predictors, outcome]].apply(pd.to_numeric, errors="coerce")
+        selected = selected.dropna()
+        if selected.empty:
+            raise ContractError(f"No complete observations for outcome '{outcome}'.")
+        x = np.column_stack([np.ones(len(selected)), selected[list(spec.predictors)]])
+        coefficients, *_ = np.linalg.lstsq(x, selected[outcome].to_numpy(), rcond=None)
+        for predictor, coefficient in zip(spec.predictors, coefficients[1:]):
+            estimates.append(EffectEstimate(
+                path=f"{predictor}->{outcome}",
+                estimate=float(coefficient),
+                role="regression",
+                diagnostics={"n": int(len(selected))},
+            ))
+    return AnalysisResult(spec, estimates, _fingerprint(frame))
 
 
 class ReportWriter:

@@ -59,6 +59,30 @@ def test_analysis_registry_exposes_capabilities():
     )
 
 
+def test_summary_comparison_repeated_measures_and_regression_adapters():
+    frame = pd.DataFrame({
+        "subject": ["a", "a", "b", "b"],
+        "time": [1, 2, 1, 2],
+        "group": ["x", "x", "y", "y"],
+        "predictor": [1, 2, 2, 4],
+        "outcome": [2, 4, 4, 8],
+    })
+    summary = analysis.descriptive_summary(frame, ["outcome"], group_by="group")
+    assert summary["n"].tolist() == [2, 2]
+    comparison = analysis.compare_groups(frame, "outcome", "group")
+    assert comparison["mean_difference"] == -3.0
+    repeated = analysis.repeated_measures_summary(frame, "subject", "time", "outcome")
+    assert repeated["time"].tolist() == [1, 2]
+    result = analysis.AnalysisRunner().run(
+        frame,
+        analysis.AnalysisSpec(
+            "regression", predictors=("predictor",), outcomes=("outcome",),
+            estimator="linear_regression",
+        ),
+    )
+    assert result.estimates[0].estimate == pytest.approx(2.0)
+
+
 def test_report_writers_have_stable_table_and_json(tmp_path):
     spec = analysis.AnalysisSpec(
         "basic apim", predictors=("x",), outcomes=("y",), roles=("h", "w")

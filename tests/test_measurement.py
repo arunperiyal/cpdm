@@ -122,3 +122,13 @@ def test_scale_map_rejects_missing_source_columns():
 
     with pytest.raises(contracts.ContractError, match="not found"):
         scoring.ScoringEngine().score(pd.DataFrame({"Other": [1]}), scale_map)
+
+
+def test_apim_scale_map_fixture_loads():
+    scale_map = measurement.ScaleMap.from_csv(
+        "tmp/APIM_Analysis/metadata/scale_map.csv"
+    )
+
+    assert len(scale_map.items) == 176
+    assert scale_map.scales() == ("PHQ", "SD4", "DERS16", "TAR", "SCSL", "CRI")
+    assert len(scale_map.dimensions("SCSL")) == 8

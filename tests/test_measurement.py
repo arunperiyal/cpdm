@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -126,7 +127,7 @@ def test_scale_map_rejects_missing_source_columns():
 
 def test_apim_scale_map_fixture_loads():
     scale_map = measurement.ScaleMap.from_csv(
-        "tmp/APIM_Analysis/metadata/scale_map.csv"
+        Path(__file__).parent / "fixtures" / "apim_scale_map.csv"
     )
 
     assert len(scale_map.items) == 176

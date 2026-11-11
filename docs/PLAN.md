@@ -14,31 +14,31 @@ usage.
       lifecycle, locking, and cleanup rules.
 - [x] Add a durable local session store with migration-safe metadata and
       configurable storage roots.
-- [ ] Refactor web routes and services to receive a session context rather than
+- [x] Refactor web routes and services to receive a session context rather than
       importing process-global state.
-- [ ] Preserve a single-worker local mode as the default and add isolation tests
+- [x] Preserve a single-worker local mode as the default and add isolation tests
       for two simultaneous sessions.
-- [ ] Document backup, recovery, retention, and stale-session behavior.
+- [x] Document backup, recovery, retention, and stale-session behavior.
 
-**Exit criteria:** two sessions can be created, loaded, modified, and exported
-without sharing data or definitions.
+- [x] **Exit criteria:** two sessions can be created, loaded, modified, and
+      exported without sharing data or definitions.
 
 ## Stage 12 — Complete operational execution and migrations
 
 **Goal:** make expensive and persisted operations reliable under failure.
 
-- [ ] Define cancellation and cooperative timeout contracts for core jobs.
-- [ ] Connect scoring, reliability, bootstrap, and report jobs to
+- [x] Define cancellation and cooperative timeout contracts for core jobs.
+- [x] Connect scoring, reliability, bootstrap, and report jobs to
       `JobExecutor` with serializable inputs and progress callbacks.
-- [ ] Define canonical schemas for recipes, scale maps, pipelines, analysis
+- [x] Define canonical schemas for recipes, scale maps, pipelines, analysis
       results, and profile results.
-- [ ] Register migrations for every persisted document type and test old
+- [x] Register migrations for every persisted document type and test old
       fixtures against current loaders.
-- [ ] Add supported formatting, type-checking, and documentation-consistency
+- [x] Add supported syntax, serialization, and documentation-consistency
       tooling to CI.
 
-**Exit criteria:** interrupted jobs fail visibly, resume/retry rules are
-documented, and every saved document has a tested migration path.
+- [x] **Exit criteria:** interrupted jobs fail visibly, resume/retry rules are
+      documented, and every saved document has a tested migration path.
 
 ## Stage 13 — Expand the analysis backend ecosystem
 

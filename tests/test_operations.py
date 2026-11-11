@@ -21,6 +21,19 @@ def test_upload_policy_and_safe_temp_directory():
             temporary.child("../outside")
 
 
+def test_upload_policy_validates_file_storage_stream():
+    class Storage:
+        filename = "sample.csv"
+
+        def __init__(self):
+            import io
+            self.stream = io.BytesIO(b"12345")
+
+    assert operations.UploadPolicy(max_bytes=5).validate_storage(Storage())
+    with pytest.raises(contracts.ContractError, match="size limit"):
+        operations.UploadPolicy(max_bytes=4).validate_storage(Storage())
+
+
 def test_job_registry_tracks_progress_and_errors():
     registry = operations.JobRegistry()
     job_id = registry.create("scoring")

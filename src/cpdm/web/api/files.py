@@ -1,8 +1,9 @@
 """Opening, exporting and inspecting the working dataset."""
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request, send_file
 
 from cpdm.core import services, state
+from cpdm.core.operations import UploadPolicy
 from cpdm.web.api.support import api_route, uploaded_file
 
 bp = Blueprint("files_api", __name__, url_prefix="/api")
@@ -10,7 +11,9 @@ bp = Blueprint("files_api", __name__, url_prefix="/api")
 
 @api_route(bp, "/upload", methods=["POST"])
 def upload():
-    return jsonify(services.DatasetService(state.session).load(uploaded_file()))
+    policy = UploadPolicy(current_app.config["CPDM_MAX_UPLOAD_BYTES"])
+    service = services.DatasetService(state.session, upload_policy=policy)
+    return jsonify(service.load(uploaded_file()))
 
 
 @api_route(bp, "/export", methods=["GET"])

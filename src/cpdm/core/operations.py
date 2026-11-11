@@ -27,6 +27,17 @@ class UploadPolicy:
             )
         return True
 
+    def validate_storage(self, file_storage):
+        """Validate a Flask-like uploaded file without consuming its stream."""
+        stream = file_storage.stream
+        position = stream.tell()
+        try:
+            stream.seek(0, 2)
+            size = stream.tell()
+        finally:
+            stream.seek(position)
+        return self.validate(getattr(file_storage, "filename", ""), size)
+
 
 class SafeTemporaryDirectory:
     """Create a private temporary directory and expose only resolved children."""

@@ -32,7 +32,14 @@ def create_app(**config):
         template_folder=TEMPLATES_DIR,
         static_folder=STATIC_DIR,
     )
-    app.config.update(JSON_SORT_KEYS=False, **config)
+    app.config.update(
+        {
+            "JSON_SORT_KEYS": False,
+            "CPDM_MAX_UPLOAD_BYTES": 50 * 1024 * 1024,
+            **config,
+        }
+    )
+    app.config.setdefault("MAX_CONTENT_LENGTH", app.config["CPDM_MAX_UPLOAD_BYTES"])
 
     @app.url_defaults
     def stamp_static(endpoint, values):

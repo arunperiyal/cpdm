@@ -113,6 +113,29 @@ def test_full_survey_workflow():
     assert "Wellbeing_Mean" in csv_export.data.decode("utf-8-sig").splitlines()[0]
 
 
+def test_upload_rejects_unsupported_extensions():
+    client = fresh_client()
+    response = client.post(
+        "/api/upload",
+        data={"file": (io.BytesIO(b"not a table"), "dataset.json")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert "Unsupported upload extension" in response.get_json()["error"]
+
+
+def test_upload_respects_configured_size_limit():
+    state.reset()
+    app = create_app(TESTING=True, CPDM_MAX_UPLOAD_BYTES=1)
+    response = app.test_client().post(
+        "/api/upload",
+        data={"file": (io.BytesIO(b"a,b\n1,2\n"), "dataset.csv")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert "size limit" in response.get_json()["error"]
+
+
 def test_csv_upload_and_recipe_replay():
     client = fresh_client()
     loaded = upload(client, "sample_survey_wave2.csv").get_json()

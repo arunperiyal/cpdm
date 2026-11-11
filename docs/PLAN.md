@@ -213,8 +213,9 @@ workflows.
 
 - [ ] Replace process-global state with explicit session storage when multi-user
   access is required; retain the single-worker safeguard until then.
-- [ ] Add upload size limits, timeout/error boundaries, and safe temporary-file
-  handling.
+- [x] Add upload size limits and safe temporary-file handling at the upload
+  boundary.
+- [ ] Add timeout and explicit error boundaries for long-running operations.
 - [ ] Add background execution and progress reporting for expensive scoring,
   reliability, bootstrap, and report jobs.
 - [ ] Add schema/version migrations for saved recipes, scale maps, pipelines, and

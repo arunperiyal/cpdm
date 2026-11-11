@@ -42,3 +42,16 @@ def test_compare_result_tables_joins_by_path_and_role():
     ])
     compared = reporting.compare_result_tables(left, right)
     assert compared.loc[0, "estimate_difference"] == 0.5
+
+
+def test_privacy_policy_filters_report_figure_data(tmp_path):
+    frame = pd.DataFrame({"participant_id": ["1"], "comment": ["secret"], "value": [2]})
+    policy = reporting.PrivacyPolicy(
+        drop_columns=("participant_id",), redact_columns=("comment",)
+    )
+    bundle = reporting.ReportBundle(tmp_path / "private").write(
+        figure_data={"rows": frame}, privacy_policy=policy
+    )
+    exported = pd.read_csv(bundle / "rows.csv")
+    assert "participant_id" not in exported
+    assert exported.loc[0, "comment"] == "[REDACTED]"

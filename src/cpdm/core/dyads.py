@@ -36,6 +36,57 @@ class DyadKey:
 
 
 @dataclass(frozen=True)
+class ObservationKey:
+    """Stable identity for longitudinal or clustered observations."""
+
+    identifier: str
+    time: str | None = None
+    cluster: str | None = None
+
+    def as_tuple(self):
+        return tuple(
+            value for value in (self.identifier, self.time, self.cluster)
+            if value is not None
+        )
+
+
+@dataclass(frozen=True)
+class ObservationKeySpec:
+    """Column contract for constructing unique observation keys."""
+
+    identifier: str
+    time: str | None = None
+    cluster: str | None = None
+
+    def columns(self):
+        return tuple(
+            value for value in (self.identifier, self.time, self.cluster)
+            if value is not None
+        )
+
+    def validate(self, frame):
+        missing = sorted(set(self.columns()) - set(frame.columns))
+        if missing:
+            raise ContractError("Observation key columns missing: " + ", ".join(missing))
+        if frame[list(self.columns())].isna().any().any():
+            raise ContractError("Observation key columns cannot contain missing values.")
+        if frame.duplicated(list(self.columns())).any():
+            raise ContractError("Observation key columns must uniquely identify rows.")
+        return self
+
+    def keys(self, frame):
+        self.validate(frame)
+        return [
+            ObservationKey(
+                str(row[self.identifier]),
+                str(row[self.time]) if self.time else None,
+                str(row[self.cluster]) if self.cluster else None,
+            )
+            for _, row in frame.iterrows()
+        ]
+
+
+@dataclass(frozen=True)
 class RoleDefinition:
     """Allowed partner roles and their display labels."""
 

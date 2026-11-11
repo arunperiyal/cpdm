@@ -11,6 +11,24 @@ from cpdm.core.contracts import ContractError
 
 
 @dataclass(frozen=True)
+class PrivacyPolicy:
+    """Controls identifier, free-text, and intermediate export columns."""
+
+    drop_columns: tuple[str, ...] = ()
+    redact_columns: tuple[str, ...] = ()
+    replacement: str = "[REDACTED]"
+
+    def apply(self, frame):
+        if not isinstance(frame, pd.DataFrame):
+            raise ContractError("Privacy filtering requires a pandas DataFrame.")
+        result = frame.drop(columns=list(self.drop_columns), errors="ignore").copy()
+        for column in self.redact_columns:
+            if column in result:
+                result[column] = self.replacement
+        return result
+
+
+@dataclass(frozen=True)
 class FigureSpec:
     """Portable description of a figure and its exported data."""
 
@@ -45,6 +63,7 @@ class ReportBundle:
         figures=(),
         figure_data=None,
         warnings=(),
+        privacy_policy=None,
     ):
         self.path.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -72,6 +91,8 @@ class ReportBundle:
             for name, frame in figure_data.items():
                 if not isinstance(frame, pd.DataFrame):
                     raise ContractError(f"Figure data '{name}' must be a DataFrame.")
+                if privacy_policy:
+                    frame = privacy_policy.apply(frame)
                 frame.to_csv(self.path / f"{name}.csv", index=False)
         (self.path / "bundle.json").write_text(
             json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"

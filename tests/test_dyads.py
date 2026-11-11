@@ -101,3 +101,14 @@ def test_derived_variables_cover_actor_partner_and_cross_partner_operations():
     assert row["partner_q1_h"] == 3
     assert row["q1_difference"] == -1
     assert row["q1_interaction"] == 6
+
+
+def test_observation_keys_support_time_and_cluster_dimensions():
+    frame = pd.DataFrame([
+        {"person": "a", "wave": "1", "site": "north"},
+        {"person": "a", "wave": "2", "site": "north"},
+    ])
+    spec = dyads.ObservationKeySpec("person", time="wave", cluster="site")
+    assert spec.keys(frame)[1].as_tuple() == ("a", "2", "north")
+    with pytest.raises(contracts.ContractError, match="uniquely"):
+        spec.keys(pd.concat([frame, frame.iloc[[0]]]))

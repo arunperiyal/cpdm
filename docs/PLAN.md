@@ -211,18 +211,34 @@ should keep raw results separate from presentation formatting.
 **Goal:** make the application dependable for larger datasets and shared
 workflows.
 
-- [ ] Replace process-global state with explicit session storage when multi-user
-  access is required; retain the single-worker safeguard until then.
-- [ ] Add upload size limits, timeout/error boundaries, and safe temporary-file
-  handling.
-- [ ] Add background execution and progress reporting for expensive scoring,
-  reliability, bootstrap, and report jobs.
-- [ ] Add schema/version migrations for saved recipes, scale maps, pipelines, and
-  results.
-- [ ] Add CI for tests, formatting/type checks, browser/API smoke tests, and
-  documentation consistency.
-- [ ] Add authentication and authorization before recommending non-loopback
+- [x] Add upload size limits and safe temporary-file handling at the upload
+  boundary.
+- [x] Add explicit API error boundaries for request-size failures and timeouts.
+- [ ] Add timeout enforcement for long-running operations.
+      Deferred until long-running operations have a common cancellation contract;
+      the current in-process executor cannot safely stop a running worker.
+- [x] Add a reusable in-process job executor with progress and failure reporting.
+- [ ] Connect expensive scoring, reliability, bootstrap, and report jobs to the
+  executor.
+  Deferred until those operations expose stable progress callbacks and
+  serialisable job inputs/outputs.
+- [x] Add explicit version validation and migration primitives for saved
+  documents.
+- [ ] Apply document migrations consistently to recipes, scale maps, pipelines,
+  and results.
+  Deferred until each document type has one canonical persisted schema and
+  loader; current formats still have independent compatibility paths.
+- [x] Add CI coverage for tests, bytecode checks, and API smoke tests.
+- [ ] Add formatting/type checks and documentation consistency checks.
+      Deferred because no formatter, type checker, or documentation validator is
+      currently part of the project's supported dependency/tooling set.
+- [x] Require bearer-token authentication before allowing non-loopback
   deployment.
+- [ ] Replace process-global state with explicit per-user session storage before
+  supporting multi-user access.
+  Deferred because the application contract is still single-worker and
+  single-dataset; changing it requires a coordinated route and deployment
+  architecture rather than an isolated Stage 7 patch.
 
 ## Stage 8 — Generalise the analysis and data-product layer
 

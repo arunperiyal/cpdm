@@ -3,6 +3,7 @@
 from functools import wraps
 
 from flask import jsonify, request
+from werkzeug.exceptions import RequestEntityTooLarge
 
 
 def api_route(blueprint, rule, **options):
@@ -19,6 +20,13 @@ def api_route(blueprint, rule, **options):
                 return func(*args, **kwargs)
             except ValueError as exc:
                 return jsonify({"error": str(exc)}), 400
+            except RequestEntityTooLarge:
+                return jsonify(
+                    {"error": "Request exceeds the configured upload size limit."}
+                ), 413
+            except TimeoutError as exc:
+                message = str(exc) or "The operation timed out."
+                return jsonify({"error": message}), 504
             except Exception as exc:  # pragma: no cover - unexpected failures
                 return jsonify({"error": f"{type(exc).__name__}: {exc}"}), 500
 

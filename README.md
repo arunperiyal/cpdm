@@ -40,7 +40,8 @@ Use `--dry-run` to validate and preview the steps without writing an output
 table. A scoring step also accepts `--scale-map path/to/scale_map.csv`.
 
 Environment overrides: `CPDM_HOST`, `CPDM_PORT`, `CPDM_DEBUG`, `CPDM_NO_BROWSER`,
-`CPDM_DOCS_DIR`, `CPDM_SAMPLES_DIR`.
+`CPDM_AUTH_TOKEN`, `CPDM_DOCS_DIR`, `CPDM_SAMPLES_DIR`. Non-loopback bindings
+require `CPDM_AUTH_TOKEN`; API requests must send `Authorization: Bearer <token>`.
 
 ### Running it as a service
 
@@ -93,10 +94,11 @@ print the `ufw`/`firewalld` command to open the port.
 
 #### Who can reach it
 
-The default `127.0.0.1` is reachable only from this machine. CPDM has no login and no
-access control, so anyone who can reach the port can read, change and export the loaded
-dataset — bind it wider only on a network you trust. For anything less trusted, keep it on
-loopback and put an authenticating reverse proxy in front.
+The default `127.0.0.1` is reachable only from this machine. Non-loopback bindings
+require `CPDM_AUTH_TOKEN`; API requests must send `Authorization: Bearer <token>`.
+Authentication is process-wide rather than per-user, because the working dataset
+still lives in one single-worker process. Keep the service on loopback when
+multi-user access or stronger authorization is required.
 
 New to the tool? Download `samples/sample_survey.xlsx` (Help → Sample Data Files) and
 follow [docs/help/01-getting-started.md](docs/help/01-getting-started.md), which is also

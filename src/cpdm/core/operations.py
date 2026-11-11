@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from uuid import uuid4
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import json
 import tempfile
 
@@ -26,6 +27,17 @@ class UploadPolicy:
                 f"Upload exceeds the {self.max_bytes} byte size limit."
             )
         return True
+
+    def validate_storage(self, file_storage):
+        """Validate a Flask-like uploaded file without consuming its stream."""
+        stream = file_storage.stream
+        position = stream.tell()
+        try:
+            stream.seek(0, 2)
+            size = stream.tell()
+        finally:
+            stream.seek(position)
+        return self.validate(getattr(file_storage, "filename", ""), size)
 
 
 class SafeTemporaryDirectory:
@@ -63,11 +75,11 @@ class JobRegistry:
         with self._lock:
             self._jobs[job_id] = {
                 "id": job_id, "operation": operation, "status": "queued",
-                "progress": 0, "error": None,
+                "progress": 0, "error": None, "result": None,
             }
         return job_id
 
-    def update(self, job_id, *, status=None, progress=None, error=None):
+    def update(self, job_id, *, status=None, progress=None, error=None, result=None):
         with self._lock:
             if job_id not in self._jobs:
                 raise ContractError(f"Unknown job '{job_id}'.")
@@ -80,12 +92,70 @@ class JobRegistry:
                 job["progress"] = progress
             if error is not None:
                 job["error"] = str(error)
+            if result is not None:
+                job["result"] = result
 
     def get(self, job_id):
         with self._lock:
             if job_id not in self._jobs:
                 raise ContractError(f"Unknown job '{job_id}'.")
             return dict(self._jobs[job_id])
+
+
+class JobExecutor:
+    """Run bounded in-process jobs while exposing registry-backed progress."""
+
+    def __init__(self, registry=None, max_workers=1):
+        self.registry = registry or JobRegistry()
+        self._executor = ThreadPoolExecutor(max_workers=max_workers)
+        self._futures = {}
+
+    def submit(self, operation, function, *args, **kwargs):
+        job_id = self.registry.create(operation)
+
+        def execute():
+            self.registry.update(job_id, status="running")
+            try:
+                result = function(*args, **kwargs)
+            except Exception as exc:
+                self.registry.update(job_id, status="failed", error=exc)
+                return
+            self.registry.update(job_id, status="completed", progress=100, result=result)
+
+        self._futures[job_id] = self._executor.submit(execute)
+        return job_id
+
+    def wait(self, job_id, timeout=None):
+        """Wait for a submitted job and return its final registry snapshot."""
+        future = self._futures.get(job_id)
+        if future is None:
+            raise ContractError(f"Unknown job '{job_id}'.")
+        future.result(timeout=timeout)
+        return self.registry.get(job_id)
+
+    def shutdown(self):
+        self._executor.shutdown(wait=True, cancel_futures=True)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.shutdown()
+
+
+def run_with_timeout(function, timeout, *args, **kwargs):
+    """Run a callable and raise ``TimeoutError`` when it exceeds a limit."""
+    if timeout <= 0:
+        raise ContractError("Timeout must be greater than zero.")
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(function, *args, **kwargs)
+    try:
+        return future.result(timeout=timeout)
+    except FutureTimeoutError:
+        future.cancel()
+        raise TimeoutError(f"Operation exceeded the {timeout} second timeout.") from None
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 class VersionedDocument:

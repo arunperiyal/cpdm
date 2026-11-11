@@ -62,6 +62,9 @@ Work from `docs/PLAN.md` one phase at a time.
 - Create a dedicated branch for every phase, using a descriptive name such as
   `phase-1-foundation` or `phase-2-measurement`.
 - Create one focused commit for every task checkbox completed in that phase.
+- Do not add co-author trailers to commit messages.
+- Write commit messages with at least five lines: a concise subject followed by
+  the purpose, important implementation details, validation, and scope notes.
 - Keep each phase branch based on the completed branch immediately below it.
 - Push the phase branch and open a pull request after all of its task commits
   pass the relevant tests.

@@ -249,9 +249,9 @@ latent profile analysis the only supported form of clustering or segmentation.
 
 Add reusable core/base classes:
 
-- [ ] `IndicatorDefinition`: source variable, measurement level, allowed
+- [x] `IndicatorDefinition`: source variable, measurement level, allowed
   values, transformation, standardisation, and missing-value policy.
-- [ ] `ProfileAnalysisSpec`: indicators, requested class counts, estimator,
+- [x] `ProfileAnalysisSpec`: indicators, requested class counts, estimator,
   covariance structure, starts, weights, covariates, and reproducibility seed.
 - [ ] `ProfileSolution`: fitted class parameters, posterior probabilities,
   most-likely class assignments, class sizes, and labelled profiles.

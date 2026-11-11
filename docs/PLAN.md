@@ -83,17 +83,17 @@ one way to create these definitions.
 **Goal:** make a complete preparation run repeatable, inspectable, and
 portable across waves of a study.
 
-- [ ] Introduce a `PreparationPipeline` with explicit steps such as load,
+- [x] Introduce a `PreparationPipeline` with explicit steps such as load,
    validate, clean headers, clean values, apply scale definitions, score,
    compute derived columns, and export.
-- [ ] Give every step an input/output schema, configuration, timestamp, and
+- [x] Give every step an input/output schema, configuration, timestamp, and
    summary of changes. Extend the existing ordered cleaning recipe rather than
    creating a second incompatible history format.
-- [ ] Add pipeline manifests containing source-file fingerprints, definition
+- [x] Add pipeline manifests containing source-file fingerprints, definition
    versions, software version, warnings, and output artifacts.
-- [ ] Support dry-run/preview mode and fail before mutation when required
+- [x] Support dry-run/preview mode and fail before mutation when required
    columns, instruments, or response values are missing.
-- [ ] Add a command-line entry point for running a saved pipeline without opening
+- [x] Add a command-line entry point for running a saved pipeline without opening
    the browser.
 
 This stage should mirror the numbered R preparation flow in
@@ -101,7 +101,7 @@ This stage should mirror the numbered R preparation flow in
 `tmp/APIM_Analysis/R/pipeline_step0.R`, while retaining Python-native
 dataframes and reports.
 
-- [ ] **Exit criteria:** a second survey wave can be processed using the same
+- [x] **Exit criteria:** a second survey wave can be processed using the same
       definitions, with a clear report of applied, skipped, and changed
       operations.
 
